@@ -1,0 +1,3694 @@
+---
+title: 'SyAqua Group: Manasa Indonesia Operations Modelling & Data Review'
+author: "AES Technical"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+     fig_caption: yes
+     number_sections: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries}
+# import libraries
+library(tidyverse)
+library(broom)
+library(flextable)
+library(kableExtra)
+library(officer)
+library(knitr)
+library(lubridate)
+library(skimr)
+```
+
+``` {r importDataNurseryWaterQuality}
+
+## import data
+indo_larvae <- read.csv("data/indo_larvae.csv")
+
+## mutate variables
+pl.centre <- indo_larvae %>%
+  mutate(tank = gsub("(^|[^0-9])0+", "\\1", tank, perl = TRUE),
+         tank = gsub("(?<!A)-[0-9]*", "", tank, perl = TRUE),
+         tank = gsub("-", "", tank),
+         feed = str_replace(feed,
+                            c("ARtemia bio|artemia Bio|Artemia Bio energy|Artemia Bio|artemia bio"),
+                            "Artemia bio"),
+         feed = str_replace(feed, c("Fangli|fengli"), "Fengli"),
+         feed = str_replace(feed, "Frippak CAR 1", "Frippak CAR1"),
+         feed = str_replace(feed, "encap mysis", "Encap Mysis"),
+         feed = str_replace(feed, "ENCAP EPL", "Encap EPL"),
+         across(do_am, ~sub("M1|M2|M3|MPL|N5.6|PL1|PL10|PL11|PL2|PL3|PL4|PL5|PL6|PL7|PL8|PL9|Z1|Z2|Z3|ZM",
+                            "", .x)),
+         across(everything(), ~sub("\\#VALUE\\!$","", .x )),
+         across(everything(), ~sub("\\#DIV\\/0\\!$", "", .x)),
+         across(everything(), ~ sub("%$", "", .x)),
+         across(c(algae_cell_am_ml, algae_cell_pm_ml, tcbs_green_water, tcbs_yellow_water), ~sub("-", "", .x)),
+         across(where(is.character), str_trim)) %>%
+  mutate_if(is.character, list(~na_if(.,""))) %>%
+  mutate_at(vars(c(volume, feed_mass_g, treatment_mass_g, doc, algaem3, bs_dom, survival_rate,
+                   freshwater , lack_of_seawater , added_seawater ,estimated_n, nauplii_stocked,
+                   algae_cell_am_ml, algae_cell_pm_ml, saliity, temp_am, temp_pm, ph_am, ph_pm, do_am,
+                   do_pm, saturation_pc, ammonia, nitrite, alkalinity_am, alkalinity_pm, deformaties,
+                   necrosis, bolitas, tcbs_green_water, tcbs_yellow_water, tcbs_green_body, tcbs_yellow_body, final_survival_rate)),
+            readr::parse_number) %>%
+  mutate(date = dmy(date),
+         bs_arrived = dmy(bs_arrived),
+         tvc = ifelse(is.na(tcbs_green_body), tcbs_yellow_body, ifelse(is.na(tcbs_yellow_body), tcbs_green_body, tcbs_green_body + tcbs_yellow_body))) %>%
+  filter(!tank == "B1")
+
+```
+
+``` {r importDataMaturationWaterQuality}
+
+## import data
+indo_maturation <- read.csv("data/indo_maturation.csv")
+
+## mutate variables
+maturation.centre <- indo_maturation %>%
+  mutate(tank = gsub("(^|[^0-9])0+", "\\1", tank, perl = TRUE),
+         temp_pm = case_when(temp_pm < 10 ~ temp_pm + 20,
+                             between(temp_pm, 35,40) ~ temp_pm - 10,
+                             temp_pm > 200 ~ temp_pm / 10,
+                             TRUE ~ temp_pm),
+         across(everything(), ~ sub("%$", "", .x)),
+         biomass_g = gsub("-", "", biomass_g)) %>%
+  mutate(across(where(is.character), ~ na_if(., ""))) %>%
+  mutate_at(vars(c(temp_am, temp_pm , do_am, do_pm, ph_am, ph_pm, salinity, alkalinity, nh4_am, nh4_pm, nh3_am, nh3_pm, no2_am, no2_pm, yvc, gvc, log_tvc, ratio_gc_yc, polychaete_g, squid_g, mortality,pop_pcs, awb_g, probiotics, biomass_g)),
+            readr::parse_number) %>%
+  mutate(date = dmy(date))
+
+```
+
+``` {r importDataBMCWaterQuality}
+
+## import data
+indo_bmc <- read.csv("data/indo_bmc.csv")
+
+## mutate variables
+bmc.centre <- indo_bmc %>%
+  select(-c(feed_frequency_2)) %>%
+  mutate(feed_ratio = gsub("Feeding Ratio", "", feed_ratio),
+         across(where(is.character), ~ na_if(., ""))) %>%
+  mutate(across(everything(), ~ sub("%$", "", .x))) %>%
+  mutate_at(vars(c(doc, population_n, abw, feed_rate, feed_n, squid_g, feed_ratio, mortality, mortality_g, biomass, probiotic_ml, prophylaxis_ml, protein_pc, water_exchange, gvc, yvc, tvc, do, nh3_am, ph_am, temp_am, temp_pm, alkalinity, salinity, no3, no2, molting, sampling_abw)),
+            readr::parse_number) %>%
+  mutate(date = dmy(date))
+
+```
+
+# Context
+In order for Aqua EcoSystems UK Limited (AES) to understand the system operations and management at the SyAqua Group Pte Limited (SAG) Manasa site, it was required that as part of our review, we would summarise water quality parameters and model the operations via Mass Balance calculations.
+This has allowed AES to review and recommend objectively through quantitative data issued via SAG Manasa.
+Please note that our review is therefore reliant upon the quality of the data. AES has endeavoured to gain all necessary data. Where not available or under process of collection, we have utilised proxy data (i.e., scientific journals). 
+
+SAG presented AES with 3 data-sets to be reviewed within three different departments:
+
+* 21-May-23 Larvae Data Report - Nursery
+* Daily Monitoring BMC Juvenile Manasa 220523 - Broodstock Maturation Centre
+* NC Data Report 19 - Maturation
+
+AES reviewed and analysed all the data-sets within their separate departments to understand system occupancy and loading. From this exercise, AES developed Mass Balance models for each of the systems and facilities to understand system performance and water requirement.
+
+***
+
+## Background
+
+SAG Manasa currently produces nauplii and post-larvae shrimp (Litopeneaus vannamei). In the future, juveniles will also be grown to broodstock size (at present, juvenile growth-rates are below expectations).
+
+Post-larvae department's (nursery) main role is larval rearing and algae production. The department comprises of two 40 ton (m^3^) seawater storage reservoirs, a larvae rearing module (ten tanks of 40m^3^) and an algae module. The algae module requires ~15m^3^ of water per day, daily water exchanges at peak times are 30-40 m^3^ per day (assumption is that up to 55 m^3^ of water may be used in the nursery department per day). Feeds are comprised of algae, artemia products and flake.
+
+The maturation department holds 1500 pairs of broodstock adults (3000 pcs). These are maintained within 12 tanks of 20 m^3^. Water exchanges are performed in the am (50-70% ~ 180 m^3^) and pm (20% ~ 20 m^3^). Feeds are comprised of squid and polychaete worm.
+
+The BMC is temporarily located within the maturation centre.
+
+Reported issues:
+
+Nauplii production:
+
+* Slow water disinfection.
+* Murky water in BS due to inconsistent (treated) water supply
+* Low average daily gain - and sometimes low feed intake
+* TVC on BS rearing, soawning and hatching tanks
+
+PL rearing:
+
+* Unstable production; Zoea syndrome occurs during production
+* TVC and GVC often found on mass algae culture
+
+Requested focus:
+
+* Faster water turnover in reservoir
+* Move away from chlorine if possible
+* Like re-circulation in maturation; maintain low vibrio and clear water
+* Site specific considerations; influent and effluent systems
+
+***
+
+# Process
+AES first undertook data cleaning procedures to standardise data-sets to allow for efficient analysis.
+
+SAG data-sets were used to analyse water quality parameters through the different systems over time and within the overall facility.
+
+Feed rates were used to define average and maximum loading for the systems upon which AES then uses in-house developed Mass Balance calculations to understand the waste derivates (i.e., Total Ammonia Nitrogen mg/L, Total Suspended Solids mg/L, etc.) concentrations and accumulations.
+
+Using this information AES will determine if the current operations meet requirements to regulate this input or if other interventions are necessary.
+
+***
+
+# Water Quality Data Analysis
+
+SAG Manasa comprises of three departments; PL centre, Maturation, BMC. A data-set was provided for each department containing information on feed input, water quality and bacterial counts.
+
+Water quality data will be summarised for each of the three main areas using summary statistics of data supplied by SAG to identify any areas of concern. These will then be investigated in greater detail as required.
+
+Water quality data has been subdivided into physical and biological variables.
+
+Physical parameters: ppm is equivalent to mg/l 
+
+* Kurang Air Laut m^3^/day - need accurate translation (lack of seawater or seawater discharged?)
+* pH
+* Salinity (ppt)
+* Alkalinity (ppm)
+* NH~3~ (ppm)
+* NO~2~^-^ (ppm)
+* DO (ppm)
+* Temp ^o^C
+
+As part of systems management, salinity, temperature and pH ranges have been supplied for: raw water, reservoir, maturation, spawning and hatching, algae and larvae rearing; it is assumed these are the desired ranges.
+
+Biological parameters:
+
+* Green vibrio count (body and water)
+* Yellow vibrio count (body and water)
+* Deformities
+* Necrosis
+* Bolitas
+
+## PL Centre
+
+A data-set containing water quality parameters was supplied covering the period `r min(pl.centre$date)` to `r max(pl.centre$date)`, a total of `r max(pl.centre$date) - min(pl.centre$date)` days. Not all parameters have been recorded during this period.
+
+### Water Quality Physical Parameters
+
+Water quality summary table for PL Centre; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+``` {r skimWaterQualityPhysicalPL}
+
+# summarise water quality data
+wqp.pl.centre.summary <- pl.centre %>%
+  skim(lack_of_seawater, temp_am, temp_pm, ph_am, ph_pm, do_am, do_pm, ammonia, nitrite, alkalinity_am, alkalinity_pm) %>%
+  mutate(skim_variable = recode(skim_variable, "lack_of_seawater" = "Lack of Seawater", "temp_am" = "Temp AM", "temp_pm" = "Temp PM", "ph_am" = "pH AM", "ph_pm" = "pH PM", "do_am" = "DO AM", "do_pm" = "DO PM", "ammonia" = "Ammonia", "nitrite" = "Nitrite", "alkalinity_am" = "Alkalinity AM", "alkalinity_pm" = "Alkalinity PM")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqPhysicalPLcentreTable, ft.align = "center"}
+
+wqp.pl.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Physical water quality summary statistics for PL Centre department"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab", bkm = "tab1"))
+```
+
+#### Kurang Air Laut
+
+``` {r plCentreLackDates}
+
+pl.centre.lack.dates <- pl.centre %>%
+  filter(!is.na(lack_of_seawater)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreLackSkim}
+
+pl.centre.lack.skim <- pl.centre %>%
+  filter(!is.na(lack_of_seawater)) %>%
+  group_by(tank) %>%
+  skim(lack_of_seawater) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+
+```
+
+Direct translation from Google Translate returns 'lack of seawater'. Not quite sure if this is what is intended, would imply that this quantity of water was desired but not available. The median value was `r median(pl.centre$lack_of_seawater, na.rm = TRUE)` m^3^/day. Closer inspection of the data-set, indicates that there are `r sum(!is.na(pl.centre$lack_of_seawater))` entries for the variable. All are positive values and zeros appear not to have been recorded. This variable has been recorded over the period; `r pl.centre.lack.dates$min` to `r pl.centre.lack.dates$max` It would be useful to record zeros where appropriate to be able to differentiate between 'missing data' and value = 0. 
+
+``` {r PLCentreTank1lack, fig.cap = "Manasa PL Centre tank 1 'lack-of-water m^3^/day' time series 2021-2013.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.lack.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(lack_of_seawater)) %>%
+  ggplot(aes(date, lack_of_seawater)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Lack-of-seawater"~m^3~"/ day")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.lack.p
+```
+
+
+
+#### Temperature
+
+``` {r plCentreTempAmDates}
+
+pl.centre.temp.am.dates <- pl.centre %>%
+  filter(!is.na(temp_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreTempPmDates}
+
+pl.centre.temp.pm.dates <- pl.centre %>%
+  filter(!is.na(temp_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreTemp}
+
+# filter to find number of occurrences of above level pH values
+pl.centre.temp.am.green <- pl.centre %>%
+  filter(between(temp_am, 29.5, 32)) %>%
+  select(temp_am)
+
+pl.centre.temp.pm.green <- pl.centre %>%
+  filter(between(temp_pm, 29.5, 32)) %>%
+  select(temp_pm)
+
+pl.centre.temp.am.red <- pl.centre %>%
+  filter(!is.na(temp_am),
+         temp_am < 29.5 | temp_am > 32) %>%
+  select(temp_am)
+
+pl.centre.temp.pm.red <- pl.centre %>%
+  filter(!is.na(temp_pm),
+         temp_pm < 29.5 | temp_pm > 32) %>%
+  select(temp_pm)
+
+pl.centre.temp.am.typos <- pl.centre %>%
+  filter(!is.na(temp_am),
+         temp_am < 20 | temp_am >= 40) %>%
+  select(temp_am)
+
+pl.centre.temp.pm.typos <- pl.centre %>%
+  filter(!is.na(temp_pm),
+         temp_pm < 20 | temp_pm >= 40) %>%
+  select(temp_pm)
+```
+
+``` {r plCentreTempSkim}
+
+pl.centre.temp.skim <- pl.centre %>%
+  filter(!is.na(temp_am)) %>%
+  group_by(tank) %>%
+  skim(temp_am) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Temperature range specified 29.5-32 ^o^C. Values for tank water temperature have been supplied for AM and PM. Temperature has been recorded for; the AM from `r pl.centre.temp.am.dates$min.date` to `r pl.centre.temp.am.dates$max.date` and for the PM from `r pl.centre.temp.pm.dates$min.date` to `r pl.centre.temp.pm.dates$max.date`. Where charts have been presented, data has been taken from the AM values as they represent the longer data-set.
+
+Occurrence of recorded temperature values within specified range; AM `r length(pl.centre.temp.am.green$temp_am)`, PM `r length(pl.centre.temp.pm.green$temp_pm)`.  
+
+Occurrence of recorded temperature values outside of specified range; AM `r length(pl.centre.temp.am.red$temp_am)`, PM `r length(pl.centre.temp.pm.red$temp_pm)`
+
+Percentage of recorded temperature values within range; AM `r format(length(pl.centre.temp.am.green$temp_am) / (length(pl.centre.temp.am.green$temp_am) + length(pl.centre.temp.am.red$temp_am)) * 100, scientific = FALSE, digits = 3)`%, PM `r format(length(pl.centre.temp.pm.green$temp_pm) / (length(pl.centre.temp.pm.green$temp_pm) + length(pl.centre.temp.pm.red$temp_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+Temperature values recorded below 20^o^C and greater than 40^o^C considered to be entered in error; AM `r length(pl.centre.temp.am.typos$temp_am)` values, PM `r length(pl.centre.temp.pm.typos$temp_pm)` values. 
+
+``` {r PLCentreTempAmHist, fig.cap = "Manasa PL Centre water temperature ^o^C histogram, specified range 29.5-32 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+pl.centre.temp.hist <- pl.centre %>%
+  select(c(temp_am, temp_pm)) %>%
+  pivot_longer(cols = c(temp_am, temp_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, temp_am = "am", temp_pm = "pm")) %>%
+  filter(!is.na(value),
+         between(value, 25, 35)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.5, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(29.5, 32.0), linetype = "dashed", color = "lightgreen", size = 1) +
+  labs(x = expression("Temperature " (degree~C)), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.temp.hist
+```
+
+A proportion of recorded values are outside of the specified range. This deviation is unlikely to affect the wellbeing of the shrimp, however it may have implications for growth rate and may interact with proportion of unionised:ionised ammonia that is present in the water.
+
+``` {r PLCentreTank1temp, fig.cap = "Manasa PL Centre tank 1 temperature ^o^C time series (am values) 2019-2023, specified range 29.5 - 32 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.temp.am.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(temp_am) & temp_am > 25) %>%
+  ggplot(aes(date, temp_am)) +
+  geom_hline(yintercept = c(29.5, 32), linetype = c("dashed"),
+             color = c("green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Temperature " (degree~C))) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.temp.am.p
+```
+
+The time series indicates that the measurement protocol changed in 2021, previously values were recorded to the nearest 0.5 ^o^C and from this point intervals were reduced to 0.1 ^o^C. Temperature values outside of the optimal range are observed throughout the time period studied.
+
+Consider: Implement temperature regulation if optimal temperature range is to be maintained. Review facility insulation.
+
+#### pH
+
+``` {r plCentrePhAmDates}
+
+pl.centre.ph.am.dates <- pl.centre %>%
+  filter(!is.na(ph_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentrePhPmDates}
+
+pl.centre.ph.pm.dates <- pl.centre %>%
+  filter(!is.na(ph_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentrePh}
+
+# filter to find number of occurrences of above level pH values
+pl.centre.ph.am.green <- pl.centre %>%
+  filter(between(ph_am, 7.8, 8.3)) %>%
+  select(ph_am)
+
+pl.centre.ph.pm.green <- pl.centre %>%
+  filter(between(ph_pm, 7.8, 8.3)) %>%
+  select(ph_pm)
+
+pl.centre.ph.am.red <- pl.centre %>%
+  filter(!is.na(ph_am),
+         ph_am < 7.8 | ph_am > 8.3) %>%
+  select(ph_am)
+
+pl.centre.ph.pm.red <- pl.centre %>%
+  filter(!is.na(ph_pm),
+         ph_pm < 7.8 | ph_am > 8.3) %>%
+  select(ph_pm)
+
+pl.centre.ph.am.typos <- pl.centre %>%
+  filter(!is.na(ph_am),
+         ph_am < 6 | ph_am >= 9) %>%
+  select(ph_am)
+
+pl.centre.ph.pm.typos <- pl.centre %>%
+  filter(!is.na(ph_pm),
+         ph_pm < 6 | ph_pm >= 9) %>%
+  select(ph_pm)
+```
+
+``` {r plCentrePhSkim}
+
+pl.centre.ph.skim <- pl.centre %>%
+  filter(!is.na(ph_pm)) %>%
+  group_by(tank) %>%
+  skim(ph_pm) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+pH range specified 7.8 - 8.3. Values for tank water pH have been supplied for AM and PM. pH has been recorded for; the AM from `r pl.centre.ph.am.dates$min.date` to `r pl.centre.ph.am.dates$max.date` and for the PM from `r pl.centre.ph.pm.dates$min.date` to `r pl.centre.ph.pm.dates$max.date`. Where charts have been presented, data has been taken from the PM values as they represent the longer data-set.
+
+Occurrence of recorded pH values within specified range; AM `r length(pl.centre.ph.am.green$ph_am)`, PM `r length(pl.centre.ph.pm.green$ph_pm)`.  
+
+Occurrence of recorded pH values outside of specified range; AM `r length(pl.centre.ph.am.red$ph_am)`, PM `r length(pl.centre.ph.pm.red$ph_pm)`
+
+Percentage of recorded values within range; AM `r format(length(pl.centre.ph.am.green$ph_am) / (length(pl.centre.ph.am.green$ph_am) + length(pl.centre.ph.am.red$ph_am)) * 100, scientific = FALSE, digits = 3)`%, PM `r format(length(pl.centre.ph.pm.green$ph_pm) / (length(pl.centre.ph.pm.green$ph_pm) + length(pl.centre.ph.pm.red$ph_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+pH values recorded below 6 and greater than 9 considered to be entered in error; AM `r length(pl.centre.ph.am.typos$ph_am)` values, PM `r length(pl.centre.ph.pm.typos$ph_pm)` values.
+
+``` {r PLCentrePhPmHist, fig.cap = "Manasa PL Centre water pH histogram, specified range 7.8 - 8.3 (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+pl.centre.ph.hist <- pl.centre %>%
+  select(c(ph_am, ph_pm)) %>%
+  pivot_longer(cols = c(ph_am, ph_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, ph_am = "am", ph_pm = "pm")) %>%
+  filter(!is.na(value), between(value, 6, 9)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(7.8, 8.3), linetype = "dashed", color = "lightgreen", size = 1) +
+  labs(x = expression("pH"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.ph.hist
+```
+
+A proportion of recorded values are outside of the specified range, with the peak frequency of values close to the upper limit of the desired range. pH has implications on survival of shrimp. pH influences the proportion of unionised ammonia (in combination with temperature, and influenced by salinity). LC50 for NH~3~-N is reduced at high pH (Barajas FJM et al. 2006. Litopeneaus vannamei (Boone) post-larval survival related to age, temperature, pH and ammonium concentration. Aquaculture research, 37, 492-499.)
+
+``` {r PLCentreTank1pH, fig.cap = "Manasa PL Centre tank 1 pH time series (PM values) 2019-2023, specified range 7.8 - 8.3 (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.ph.pm.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(ph_pm) & ph_pm > 6 & ph_pm < 9) %>%
+  ggplot(aes(date, ph_pm)) +
+  geom_hline(yintercept = c(7.8, 8.3), linetype = c("dashed"),
+             color = c("green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("pH")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.ph.pm.p
+```
+
+pH values outside of the optimal range are observed throughout the time period studied.
+
+Consider: Implement pH regulation if optimal pH range is to be maintained. A starting point could be an automated monitoring and pH dosing system that regulates incoming seawater post treatment and prior to being distributed to livestock departments.
+
+#### DO
+
+``` {r plCentreDoAmDates}
+
+pl.centre.do.am.dates <- pl.centre %>%
+  filter(!is.na(do_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreDoPmDates}
+
+pl.centre.do.pm.dates <- pl.centre %>%
+  filter(!is.na(do_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreDo}
+
+# filter to find number of occurrences of above level pH values
+pl.centre.do.am.green <- pl.centre %>%
+  filter(do_am >= 5) %>%
+  select(do_am)
+
+pl.centre.do.pm.green <- pl.centre %>%
+  filter(do_pm >= 5) %>%
+  select(do_pm)
+
+pl.centre.do.am.amber <- pl.centre %>%
+  filter(do_am <5 & do_am >3) %>%
+  select(do_am)
+
+pl.centre.do.pm.amber <- pl.centre %>%
+  filter(do_pm <5 & do_pm >3)
+
+pl.centre.do.am.red <- pl.centre %>%
+  filter(!is.na(do_am),
+         do_am <= 3) %>%
+  select(do_am)
+
+pl.centre.do.pm.red <- pl.centre %>%
+  filter(!is.na(do_pm),
+         do_pm <= 3) %>%
+  select(do_pm)
+
+pl.centre.do.am.typos <- pl.centre %>%
+  filter(!is.na(do_am),
+         do_am > 6.8) %>%
+  select(do_am)
+
+pl.centre.do.pm.typos <- pl.centre %>%
+  filter(!is.na(do_pm),
+         do_pm > 6.8) %>%
+  select(do_pm)
+
+oxygen.calculator <- function(t, s){
+  tk <- t + 273.15
+  do <- exp(-139.34411 + (1.575701e5 / tk) - (6.642308e7 / tk^2) + (1.243800e10 / tk^3) - (8.621949e11 / tk^4))
+  fs <- exp(-s * (0.017674 - (10.754 / tk) + (2140.7 / tk^2)))
+  return(do * fs)
+  }
+
+do.typos <- oxygen.calculator(28, 28)
+
+pl.centre.do.pm.typos <- pl.centre %>%
+  filter(!is.na(do_pm),
+         do_pm > do.typos) %>%
+  select(do_pm)
+```
+
+``` {r plCentreDoSkim}
+
+pl.centre.do.skim <- pl.centre %>%
+  filter(!is.na(do_am)) %>%
+  group_by(tank) %>%
+  skim(do_am) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Dissolved oxygen (DO) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green >= 5 mg/l, amber < 5 & > 3 mg/l, red <=3 mg/l. Values for tank water DO have been supplied for AM and PM. DO has been recorded for; the AM from `r pl.centre.do.am.dates$min.date` to `r pl.centre.do.am.dates$max.date` and for the PM from `r pl.centre.do.pm.dates$min.date` to `r pl.centre.do.pm.dates$max.date`. Where charts have been presented, data has been taken from the AM values as they represent the longer data-set. DO values have not been recorded in 2021-2022.
+
+Occurrence of recorded DO values within green range; am `r length(pl.centre.do.am.green$do_am)`, pm `r length(pl.centre.do.pm.green$do_pm)`.  
+
+Occurrence of recorded pH values within amber range; am `r length(pl.centre.do.am.amber$do_am)`, pm `r length(pl.centre.do.pm.amber$do_pm)`
+
+Occurrence of recorded pH values within red range; am `r length(pl.centre.do.am.red$do_am)`, pm `r length(pl.centre.do.pm.red$do_pm)`
+
+Percentage of recorded values within green range; am `r format(length(pl.centre.do.am.green$do_am) / (length(pl.centre.do.am.green$do_am) + length(pl.centre.do.am.red$do_am) + length(pl.centre.do.am.amber$do_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(pl.centre.do.pm.green$do_pm) / (length(pl.centre.do.pm.green$do_pm) + length(pl.centre.do.pm.red$do_pm) + length(pl.centre.do.pm.amber$do_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+For the temperature and salinity indicated, DO saturation value is `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l. Check calibration / test procedure.
+
+DO values recorded  greater than `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l considered to be entered in error; am `r length(pl.centre.do.am.typos$do_am)` values, pm `r length(pl.centre.do.pm.typos$do_pm)` values.
+
+``` {r PLCentreDOamHist, fig.cap = "Manasa PL Centre water dissolved oxygen - DO mg/l histogram, 'green range' > 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+pl.centre.do.hist <- pl.centre %>%
+  select(c(do_am, do_pm)) %>%
+  pivot_longer(cols = c(do_am, do_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, do_am = "am", do_pm = "pm")) %>%
+  filter(!is.na(value),
+         between(value, 0,10)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.25, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(3, 5), linetype = c("dotted", "dashed"), color = c("orange", "green"), size = 1) +
+  labs(x = expression("DO mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.do.hist
+```
+
+A large proportion of DO values from AM are below the safe level of 5 mg/l. The theoretical maximum DO value at 28 ^o^C in seawater at 28 ppt is `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` (without additional oxygen saturation). As some values are above this figure, there is some suspicion of the accuracy of the measurement - this can be seen in the secondary peak of the histogram for both AM and PM values.
+
+``` {r PLCentreTank1DO, fig.cap = "Manasa PL Centre tank 1 dissolved oxygen DO mg/l time series (am values) 2020-2023, 'green range' > 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.do.am.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(do_am)) %>%
+  ggplot(aes(date, do_am)) +
+  geom_hline(yintercept = c(3, 5), linetype = c("dotted", "dashed"),
+             color = c("orange", "green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("DO mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.do.am.p
+```
+
+A large absence of DO records from 2021-2023. DO values in the range of 4-5.2 mg/l in 2020, all values at or above 5 mg/l in 2023. The theoretical maximum DO value at 28 ^o^C in seawater at 28 ppt is `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` (without additional oxygen saturation). As some values are above this figure, there is some suspicion of the accuracy of the measurement.
+
+Consider: Calibration of oxygen meter/ methodology. Determine new oxygen range; if values below optimal range are observed modify oxygen environment (reduce stocking density/ increase water exchange rate/ aeration).
+
+#### Ammonia
+
+``` {r plCentreNH3Dates}
+
+pl.centre.nh3.dates <- pl.centre %>%
+  filter(!is.na(ammonia)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreNH3}
+
+# filter to find number of occurrences of above level nh4 values
+pl.centre.nh3.green <- pl.centre %>%
+  filter(ammonia < 0.16) %>%
+  select(ammonia)
+
+pl.centre.nh3.amber <- pl.centre %>%
+  filter(between(ammonia, 0.16, 0.3)) %>%
+  select(ammonia)
+
+pl.centre.nh3.red <- pl.centre %>%
+  filter(ammonia > 0.3) %>%
+  select(ammonia)
+
+pl.centre.nh3.typos <- pl.centre %>%
+  filter(ammonia > 1) %>%
+  select(ammonia)
+```
+
+``` {r plCentreNH3Skim}
+
+pl.centre.nh3.skim <- pl.centre %>%
+  filter(!is.na(ammonia)) %>%
+  group_by(tank) %>%
+  skim(ammonia) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Ammonia (NH~3~) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green < 0.16 mg/l, amber 0.16 - 0.3 mg/l, red > 0.3 mg/l. The variable is labelled as ammonia (so assumption is that this refers to un-ionised ammonia) not TAN (Total ammonia nitrogen). Ammonia has been recorded from `r pl.centre.nh3.dates$min.date` to `r pl.centre.nh3.dates$max.date`. Ammonia values stopped being recorded in early 2020 and were resumed in 2023.
+
+Occurrence of recorded ammonia values within green range; `r length(pl.centre.nh3.green$ammonia)`.
+
+Occurrence of recorded ammonia values within amber range; `r length(pl.centre.nh3.amber$ammonia)`.
+
+Occurrence of recorded ammonia values within red range; `r length(pl.centre.nh3.red$ammonia)`.
+
+Percentage of recorded ammonia values within green range; `r format(length(pl.centre.nh3.green$ammonia) / (length(pl.centre.nh3.green$ammonia) + length(pl.centre.nh3.red$ammonia) + length(pl.centre.nh3.amber$ammonia)) * 100, scientific = FALSE, digits = 3)`%.
+
+Ammonia values recorded  greater than 1 considered to be entered in error;  `r length(pl.centre.nh3.typos$ammonia)` values.
+
+``` {r PLCentreNH3Hist, fig.cap = "Manasa PL Centre water ammonia - (NH~3~-N) mg/l  histogram, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.nh3.hist <- pl.centre %>%
+  filter(!is.na(ammonia),
+         ammonia < 5) %>%
+  ggplot(aes(ammonia)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.02, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("Ammonia mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.nh3.hist
+```
+
+``` {r PLCentreTank1NH3, fig.cap = "Manasa PL Centre tank 4 ammonia NH~3~-N mg/l time series 2019-2023, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.nh3.p <- pl.centre %>%
+  filter(tank == "A4" & !is.na(ammonia) & ammonia < 5) %>%
+  ggplot(aes(date, ammonia)) +
+  geom_hline(yintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Ammonia mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.nh3.p
+```
+
+A large absence of Ammonia records from 2020-2023. Ammonia values in the range of 0-0.16 mg/l in 2019, all values at or above 0.25 mg/l in 2023. Has the same methodology or test kit been used for both time periods - or do 2023 values represent TAN rather than NH~3~? If 2023 values do indeed represent accurate NH~3~ concentrations they pose a hazard to the livestock.
+
+Consider: Review of Ammonia test kit and protocol, report back to AES with details of current test kit for a secondary analysis.
+
+#### Nitrite
+
+``` {r plCentreNO2Dates}
+
+pl.centre.no2.dates <- pl.centre %>%
+  filter(!is.na(nitrite)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreNO2}
+
+# filter to find number of occurrences of above level nh4 values
+pl.centre.no2.green <- pl.centre %>%
+  filter(nitrite < 0.5) %>%
+  select(nitrite)
+
+pl.centre.no2.amber <- pl.centre %>%
+  filter(between(nitrite, 0.5, 0.8)) %>%
+  select(nitrite)
+
+pl.centre.no2.red <- pl.centre %>%
+  filter(nitrite > 0.8) %>%
+  select(nitrite)
+
+pl.centre.no2.typos <- pl.centre %>%
+  filter(nitrite > 3) %>%
+  select(nitrite)
+```
+
+``` {r plCentreNO2Skim}
+
+pl.centre.no2.skim <- pl.centre %>%
+  filter(!is.na(nitrite)) %>%
+  group_by(tank) %>%
+  skim(nitrite) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Nitrite (NO~2~) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green <0.5, amber 0.50 - 0.8, red > 0.8. 
+
+Nitrite has been recorded from `r pl.centre.no2.dates$min.date` to `r pl.centre.no2.dates$max.date`  
+
+Occurrence of recorded nitrite values within green range; `r length(pl.centre.no2.green$nitrite)`.
+
+Occurrence of recorded nitrite values within amber range; `r length(pl.centre.no2.amber$nitrite)`.
+
+Occurrence of recorded nitrite values within red range; `r length(pl.centre.no2.red$nitrite)`.
+
+Percentage of recorded nitrite values within green range; `r format(length(pl.centre.no2.green$nitrite) / (length(pl.centre.no2.green$nitrite) + length(pl.centre.no2.red$nitrite) + length(pl.centre.no2.amber$nitrite)) * 100, scientific = FALSE, digits = 3)`%.
+
+Nitrite values recorded  greater than 3 considered to be entered in error;  `r length(pl.centre.no2.typos$nitrite)` values.
+
+``` {r PLCentreNO2Hist, fig.cap = "Manasa PL Centre water nitrite - NO~2~-N mg/l histogram, 'green range' ≤ 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.no2.hist <- pl.centre %>%
+  filter(!is.na(nitrite),
+         nitrite <= 3) %>%
+  ggplot(aes(nitrite)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.2, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.2) +
+  geom_vline(xintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("Nitrite mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.no2.hist
+```
+
+``` {r PLCentreTank1NO2, fig.cap = "Manasa PL Centre tank 4 nitrite NO~2~-N mg/l time series 2022, 'green range' ≤ 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.no2.p <- pl.centre %>%
+  filter(tank == "A4" & !is.na(nitrite) & nitrite < 5) %>%
+  ggplot(aes(date, nitrite)) +
+  geom_hline(yintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("Date") ,y = expression("Nitrite mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.no2.p
+```
+
+Nitrite concentration has only been recorded for a short period of time. A number of values are within the range that has been classified 'red'. 
+
+Consider: Daily nitrite testing in livestock tanks. Increase water exchange volume/ frequency.
+
+#### Alkalinity
+
+``` {r plCentreAlkAmDates}
+
+pl.centre.alk.am.dates <- pl.centre %>%
+  filter(!is.na(alkalinity_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreAlkPmDates}
+
+pl.centre.alk.pm.dates <- pl.centre %>%
+  filter(!is.na(alkalinity_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreAlk}
+
+# filter to find number of occurrences of above level alk values
+pl.centre.alk.am.green <- pl.centre %>%
+  filter(between(alkalinity_am, 150, 200)) %>%
+  select(alkalinity_am)
+
+pl.centre.alk.pm.green <- pl.centre %>%
+  filter(between(alkalinity_pm, 150, 200)) %>%
+  select(alkalinity_pm)
+
+pl.centre.alk.am.amber <- pl.centre %>%
+  filter(!is.na(alkalinity_am),
+         alkalinity_am >= 110 & alkalinity_am < 150 | alkalinity_am > 200 & alkalinity_am <= 240) %>%
+  select(alkalinity_am)
+
+pl.centre.alk.pm.amber <- pl.centre %>%
+  filter(!is.na(alkalinity_pm),
+         alkalinity_pm >= 110 & alkalinity_pm < 150 | alkalinity_pm > 200 & alkalinity_pm <= 240) %>%
+  select(alkalinity_pm)
+
+pl.centre.alk.am.red <- pl.centre %>%
+  filter(!is.na(alkalinity_am),
+         alkalinity_am < 110 | alkalinity_am > 240) %>%
+  select(alkalinity_am)
+
+pl.centre.alk.pm.red <- pl.centre %>%
+  filter(!is.na(alkalinity_pm),
+         alkalinity_pm < 110 | alkalinity_pm > 240) %>%
+  select(alkalinity_pm)
+
+pl.centre.alk.am.typos <- pl.centre %>%
+  filter(!is.na(alkalinity_am),
+         alkalinity_am < 30 | alkalinity_am > 400) %>%
+  select(alkalinity_am)
+
+pl.centre.alk.pm.typos <- pl.centre %>%
+  filter(!is.na(alkalinity_pm),
+         alkalinity_pm < 30 | alkalinity_pm > 400) %>%
+  select(alkalinity_pm)
+```
+
+``` {r plCentreAlkSkim}
+
+pl.centre.alk.skim <- pl.centre %>%
+  filter(!is.na(alkalinity_am)) %>%
+  group_by(tank) %>%
+  skim(alkalinity_am) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Alkalinity range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green 150-200, amber 110- <150 or >200-240, red <110 or >240. Values for tank water alkalinity have been supplied for am and pm. Alkalinity has been recorded for; the AM from `r pl.centre.alk.am.dates$min.date` to `r pl.centre.alk.am.dates$max.date` and for the PM from `r pl.centre.alk.pm.dates$min.date` to `r pl.centre.alk.pm.dates$max.date`. Where charts have been presented, data has been taken from the AM values as they represent the longer data-set. Alkalinity was not recorded for the period 2021-2022.
+
+Occurrence of recorded alkalinity values within green range; am `r length(pl.centre.alk.am.green$alkalinity_am)`, pm `r length(pl.centre.alk.pm.green$alkalinity_pm)`.  
+
+Occurrence of recorded alkalinity values within amber range; am `r length(pl.centre.alk.am.amber$alkalinity_am)`, pm `r length(pl.centre.alk.pm.amber$alkalinity_pm)`
+
+Occurrence of recorded alkalinity values within red range; am `r length(pl.centre.alk.am.red$alkalinity_am)`, pm `r length(pl.centre.alk.pm.red$alkalinity_pm)`
+
+Percentage of recorded alkalinity values within green range; am `r format(length(pl.centre.alk.am.green$alkalinity_am) / (length(pl.centre.alk.am.green$alkalinity_am) + length(pl.centre.alk.am.red$alkalinity_am) + length(pl.centre.alk.am.amber$alkalinity_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(pl.centre.alk.pm.green$alkalinity_pm) / (length(pl.centre.alk.pm.green$alkalinity_pm) + length(pl.centre.alk.pm.red$alkalinity_pm) + length(pl.centre.alk.pm.amber$alkalinity_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+Alkalinity values recorded below 30 and greater than 400 considered to be entered in error; am `r length(pl.centre.alk.am.typos$alkalinity_am)` values, pm `r length(pl.centre.alk.pm.typos$alkalinity_pm)` values.
+
+``` {r PLCentreAlkamHist, fig.cap = "Manasa PL Centre water dissolved alkalinity mg/l (AM) histogram, 'green range' 150-200 mg/l (dashed lines are outer boundaries), 'amber range' 110-150 mg/l or 200-240 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 240 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+pl.centre.alk.hist <- pl.centre %>%
+  select(c(alkalinity_am, alkalinity_pm)) %>%
+  pivot_longer(cols = c(alkalinity_am, alkalinity_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, alkalinity_am = "am", alkalinity_pm = "pm")) %>%
+  filter(!is.na(value),
+         between(value, 0, 300)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 10, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 10) +
+  geom_vline(xintercept = c(110, 150, 200, 240), linetype = c("dotted", "dashed", "dashed", "dotted"), color = c("orange", "green", "green", "orange"), size = 1) +
+  labs(x = expression("Alkalinity mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.alk.hist
+```
+
+``` {r PLCentreTank1Alk, fig.cap = "Manasa PL Centre tank 1 alkalinity mg/l time series (am values) 2019-2023, 'green range' 150-200 mg/l (dashed lines are outer boundaries), 'amber range' 110-150 mg/l or 200-240 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 240 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.alk.am.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(alkalinity_am) & alkalinity_am > 30 & alkalinity_am < 400) %>%
+  ggplot(aes(date, alkalinity_am)) +
+  geom_hline(yintercept = c(110, 150, 200, 240), linetype = c("dotted", "dashed", "dashed", "dotted"),
+             color = c("orange", "green", "green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("Date") ,y = expression("Alkalinity mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.alk.am.p
+```
+
+A large absence of alkalinity records from 2020-2023. Alkalinity levels consistently below desired range.
+
+Consider: Manual or automated dosing of alkalinity (for example sodium bicarbonate, caution required as pH already at upper levels of safety and raising pH would have implications on quantity of unionised ammonia present, determine cost/ benefit and evaluate desired alkalinity range).
+
+### Water Quality Biological Parameters
+
+Water quality summary table for PL Centre; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+``` {r skimWaterQualityBiologicalPL}
+
+# summarise water quality data
+wqb.pl.centre.summary <- pl.centre %>% 
+  skim(tcbs_green_water, tcbs_yellow_water, tvc, deformaties, necrosis, bolitas) %>%
+  mutate(skim_variable = recode(skim_variable, "tcbs_green_water" = "Green vibrio water", "tcbs_yellow_water" = "Yellow vibrio water", "tvc" = "Total vibrio count body", "deformaties" = "Deformities %", "necrosis" = "Necrosis %", "bolitas" = "Bolitas %")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqBiologicalPLcentreTable, ft.align = "center"}
+
+wqb.pl.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Biological water quality summary statistics for PL Centre department."), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+#### Green vibrio water
+
+``` {r plCentreGVCDates}
+
+pl.centre.gvc.dates <- pl.centre %>%
+  filter(!is.na(tcbs_green_water)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreGVC}
+
+# filter to find number of occurrences of above level gvc values
+pl.centre.gvc.green <- pl.centre %>%
+  filter(tcbs_green_water < 80) %>%
+  select(tcbs_green_water)
+
+pl.centre.gvc.amber <- pl.centre %>%
+  filter(between(tcbs_green_water, 80, 100)) %>%
+  select(tcbs_green_water)
+
+pl.centre.gvc.red <- pl.centre %>%
+  filter(tcbs_green_water > 100) %>%
+  select(tcbs_green_water)
+
+```
+
+``` {r plCentreGVCSkim}
+
+pl.centre.gvc.skim <- pl.centre %>%
+  filter(!is.na(tcbs_green_water)) %>%
+  group_by(tank) %>%
+  skim(tcbs_green_water) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+GVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <80 CFU/ml, amber 80-100 CFU/ml, red >100 CFU/ml.
+
+GVC has been recorded from `r pl.centre.gvc.dates$min.date` to `r pl.centre.gvc.dates$max.date`  
+
+Occurrence of recorded GVC values within green range; `r length(pl.centre.gvc.green$tcbs_green_water)`.
+
+Occurrence of recorded GVC values within amber range; `r length(pl.centre.gvc.amber$tcbs_green_water)`.
+
+Occurrence of recorded GVC values within red range; `r length(pl.centre.gvc.red$tcbs_green_water)`.
+
+Percentage of recorded GVC values within green range; `r format(length(pl.centre.gvc.green$tcbs_green_water) / (length(pl.centre.gvc.green$tcbs_green_water) + length(pl.centre.gvc.red$tcbs_green_water) + length(pl.centre.gvc.amber$tcbs_green_water)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r PLCentreGVCHist, fig.cap = "Manasa PL Centre water GVC histogram, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+gvc.breaks <- c(0.1, 1, 10, 100, 1000, 10000)
+
+pl.centre.gvc.hist <- pl.centre %>%
+  filter(!is.na(tcbs_green_water)) %>%
+  ggplot(aes(tcbs_green_water)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("GVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+pl.centre.gvc.hist
+```
+
+``` {r PLCentreTank1Gvc, fig.cap = "Manasa PL Centre tank 1 GVC time series 2022-2023, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.gvc.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(tcbs_green_water)) %>%
+  ggplot(aes(date, tcbs_green_water)) + 
+  scale_y_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("Date") ,y = expression("GVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.gvc.p
+```
+
+#### Yellow vibrio water
+
+``` {r plCentreYVCDates}
+
+pl.centre.yvc.dates <- pl.centre %>%
+  filter(!is.na(tcbs_yellow_water)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreYVC}
+
+# filter to find number of occurrences of above level gvc values
+pl.centre.yvc.green <- pl.centre %>%
+  filter(tcbs_yellow_water < 1000) %>%
+  select(tcbs_yellow_water)
+
+pl.centre.yvc.amber <- pl.centre %>%
+  filter(between(tcbs_yellow_water, 1000, 10000)) %>%
+  select(tcbs_yellow_water)
+
+pl.centre.yvc.red <- pl.centre %>%
+  filter(tcbs_yellow_water > 10000) %>%
+  select(tcbs_yellow_water)
+
+```
+
+``` {r plCentreYVCSkim}
+
+pl.centre.yvc.skim <- pl.centre %>%
+  filter(!is.na(tcbs_yellow_water)) %>%
+  group_by(tank) %>%
+  skim(tcbs_yellow_water) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+YVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <1000 CFU/ml, amber 1000-10,000 CFU/ml, red >10,000 CFU/ml.
+
+YVC has been recorded from `r pl.centre.yvc.dates$min.date` to `r pl.centre.yvc.dates$max.date`  
+
+Occurrence of recorded YVC values within green range; `r length(pl.centre.yvc.green$tcbs_yellow_water)`.
+
+Occurrence of recorded YVC values within amber range; `r length(pl.centre.yvc.amber$tcbs_yellow_water)`.
+
+Occurrence of recorded YVC values within red range; `r length(pl.centre.yvc.red$tcbs_yellow_water)`.
+
+Percentage of recorded YVC values within green range; `r format(length(pl.centre.yvc.green$tcbs_yellow_water) / (length(pl.centre.yvc.green$tcbs_yellow_water) + length(pl.centre.yvc.red$tcbs_yellow_water) + length(pl.centre.yvc.amber$tcbs_yellow_water)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r PLCentreYVCHist, fig.cap = "Manasa PL Centre water YVC histogram, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+yvc.breaks <- c(0.1, 1, 10, 100, 1000, 10000, 100000, 1000000)
+
+pl.centre.yvc.hist <- pl.centre %>%
+  filter(!is.na(tcbs_yellow_water)) %>%
+  ggplot(aes(tcbs_yellow_water)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("YVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+pl.centre.yvc.hist
+```
+
+``` {r PLCentreTank1Yvc, fig.cap = "Manasa PL Centre tank 1 YVC time series 2020-2023, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.yvc.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(tcbs_yellow_water)) %>%
+  ggplot(aes(date, tcbs_yellow_water)) + 
+  scale_y_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("") ,y = expression("YVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.yvc.p
+```
+
+#### Total vibrio body
+
+``` {r plCentreTVCDates}
+
+pl.centre.tvc.dates <- pl.centre %>%
+  filter(!is.na(tvc)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r PLCentreTVC}
+
+# filter to find number of occurrences of above level gvc values
+pl.centre.tvc.green <- pl.centre %>%
+  filter(tvc < 1000 & !is.na(tvc)) %>%
+  select(tvc)
+
+pl.centre.tvc.amber <- pl.centre %>%
+  filter(between(tvc, 1000, 10000)) %>%
+  select(tvc)
+
+pl.centre.tvc.red <- pl.centre %>%
+  filter(tvc > 10000) %>%
+  select(tvc)
+
+```
+
+``` {r plCentreTVCSkim}
+
+pl.centre.tvc.skim <- pl.centre %>%
+  filter(!is.na(tvc)) %>%
+  group_by(tank) %>%
+  skim(tvc) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+TVC Body range not specified, online sources indicate an upper threshold of 10^5^ CFU/g. Have adapted  traffic light system from SAG Sichon (nursery); green <1000 CFU/ml, amber 1000-10,000 CFU/ml, red >10,000 CFU/ml.
+
+TVC has been recorded from `r pl.centre.tvc.dates$min.date` to `r pl.centre.tvc.dates$max.date`  
+
+Occurrence of recorded TVC values within green range; `r length(pl.centre.tvc.green$tvc)`.
+
+Occurrence of recorded TVC values within amber range; `r length(pl.centre.tvc.amber$tvc)`.
+
+Occurrence of recorded TVC values within red range; `r length(pl.centre.tvc.red$tvc)`.
+
+Percentage of recorded TVC values within green range; `r format(length(pl.centre.tvc.green$tvc) / (length(pl.centre.tvc.green$tvc) + length(pl.centre.tvc.red$tvc) + length(pl.centre.tvc.amber$tvc)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r PLCentreTVCHist, fig.cap = "Manasa PL Centre water TVC histogram, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+tvc.breaks <- c(0.1, 1, 10, 100, 1000, 10000, 100000, 1000000)
+
+pl.centre.tvc.hist <- pl.centre %>%
+  filter(!is.na(tvc)) %>%
+  ggplot(aes(tvc)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = tvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("TVC count per gPL"), y = "Frequency") +
+  theme_minimal()
+
+pl.centre.tvc.hist
+```
+
+#### Deformities
+
+``` {r plCentreDeformitiesDates}
+
+pl.centre.deformities.dates <- pl.centre %>%
+  filter(!is.na(deformaties)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreDeformitySkim}
+
+pl.centre.deformities.skim <- pl.centre %>%
+  filter(!is.na(deformaties)) %>%
+  group_by(tank) %>%
+  skim(deformaties) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Deformity range not specified.
+
+Deformities have been recorded from `r pl.centre.deformities.dates$min.date` to `r pl.centre.deformities.dates$max.date`. 
+
+``` {r PLCentreDeformitiesHist, fig.cap = "Manasa PL Centre shrimp percentage deformities histogram.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.deformities.hist <- pl.centre %>%
+  filter(!is.na(deformaties)) %>%
+  ggplot(aes(deformaties)) +
+  geom_histogram(aes(y=..density..), binwidth = 1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 1) +
+  xlim(c(0, 25)) +
+  labs(x = expression("Deformities %"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.deformities.hist
+```
+
+``` {r PLCentreTank1Deformities, fig.cap = "Manasa PL Centre tank 1 deformities % time series 2019-2023.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.deformities.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(deformaties)) %>%
+  ggplot(aes(date, deformaties)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Deformities %")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.deformities.p
+```
+
+#### Necrosis
+
+``` {r plCentreNecrosisDates}
+
+pl.centre.necrosis.dates <- pl.centre %>%
+  filter(!is.na(necrosis)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreNecrosisSkim}
+
+pl.centre.necrosis.skim <- pl.centre %>%
+  filter(!is.na(necrosis)) %>%
+  group_by(tank) %>%
+  skim(necrosis) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Necrosis range not specified.
+
+Necrosis has been recorded from `r pl.centre.necrosis.dates$min.date` to `r pl.centre.necrosis.dates$max.date`.
+
+``` {r PLCentreNecrosisHist, fig.cap = "Manasa PL Centre shrimp percentage necrosis histogram.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.necrosis.hist <- pl.centre %>%
+  filter(!is.na(necrosis)) %>%
+  ggplot(aes(necrosis)) +
+  geom_histogram(aes(y=..density..), binwidth = 1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 1) +
+  xlim(c(0, 30)) +
+  labs(x = expression("Necrosis %"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.necrosis.hist
+```
+
+``` {r PLCentreTank1Necrosis, fig.cap = "Manasa PL Centre tank 4 nitrite necrosis % time series 2019-2023.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.necrosis.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(necrosis)) %>%
+  ggplot(aes(date, necrosis)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Necrosis %")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.necrosis.p
+```
+
+#### Bolitas
+
+``` {r plCentreBolitasDates}
+
+pl.centre.bolitas.dates <- pl.centre %>%
+  filter(!is.na(bolitas)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreBolitasSkim}
+
+pl.centre.bolitas.skim <- pl.centre %>%
+  filter(!is.na(bolitas)) %>%
+  group_by(tank) %>%
+  skim(bolitas) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Bolitas range not specified.
+
+Bolitas have been recorded from `r pl.centre.bolitas.dates$min.date` to `r pl.centre.necrosis.dates$max.date`.
+
+``` {r PLCentreBolitasHist, fig.cap = "Manasa PL Centre shrimp percentage bolitas histogram.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.bolitas.hist <- pl.centre %>%
+  filter(!is.na(bolitas)) %>%
+  ggplot(aes(bolitas)) +
+  geom_histogram(aes(y=..density..), binwidth = 1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 1) +
+  xlim(c(0, 20)) +
+  labs(x = expression("Bolitas %"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.bolitas.hist
+```
+
+``` {r PLCentreTank1Bolitas, fig.cap = "Manasa PL Centre tank 1 bolitas % time series 2020.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.bolitas.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(bolitas)) %>%
+  ggplot(aes(date, bolitas)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Bolitas %")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.bolitas.p
+```
+
+#### Final survival rate
+
+``` {r plCentreSurvivalDates}
+
+pl.centre.survival.dates <- pl.centre %>%
+  filter(!is.na(final_survival_rate)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r plCentreSurvivalSkim}
+
+pl.centre.survival.skim <- pl.centre %>%
+  filter(!is.na(final_survival_rate) & final_survival_rate <= 100) %>%
+  group_by(tank) %>%
+  skim(final_survival_rate) %>%
+  arrange(match(tank, c("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10")), desc(tank))
+```
+
+Batch survival has been recorded from `r pl.centre.survival.dates$min.date` to `r pl.centre.survival.dates$max.date`.
+
+``` {r PLCentreSurvivalHist, fig.cap = "Manasa PL Centre shrimp survival per batch % histogram.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.survival.hist <- pl.centre %>%
+  filter(!is.na(final_survival_rate)) %>%
+  group_by(tank_id) %>%
+  summarise(rate = mean(final_survival_rate), na.rm = TRUE) %>%
+  ggplot(aes(rate)) +
+  geom_histogram(aes(y=..density..), binwidth = 5, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 5, na.rm = TRUE) +
+  labs(x = expression("Survival %"), y = "Relative Frequency") +
+  theme_minimal()
+
+pl.centre.survival.hist
+```
+
+``` {r PLCentreZeroSurvival}
+
+pl.batch.survival <- pl.centre %>%
+  filter(!is.na(final_survival_rate)) %>%
+  group_by(tank_id) %>%
+  summarise(rate = mean(final_survival_rate))
+
+pl.zero.survival <- pl.batch.survival %>%
+  filter(rate == 0)
+
+```
+
+Quite a peak at the start of the histogram - calculate percentage of batches with zero survival.
+
+Number of unique batches: `r length(pl.batch.survival$rate)`.  
+Number of batches with zero survival: `r length(pl.zero.survival$rate)`.  
+Percentage of batches with zero survival: `r format(length(pl.zero.survival$rate) / length(pl.batch.survival$rate) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r PLCentreTank1Survival, fig.cap = "Manasa PL Centre tank 1 batch survival % time series 2020.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank1.survival.p <- pl.centre %>%
+  filter(tank == "A1" & !is.na(final_survival_rate)) %>%
+  ggplot(aes(date, final_survival_rate)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Batch Survival %")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+pl.centre.tank1.survival.p
+```
+
+## Maturation Centre
+
+A data-set containing water quality parameters was supplied covering the period `r min(maturation.centre$date)` to `r max(maturation.centre$date)`, a total of `r max(maturation.centre$date) - min(maturation.centre$date)` days. 
+
+The data-set contains parameters recorded from:
+
+* Quarantine tanks
+* Maturation tanks
+* Nauplii tanks
+
+Not all parameters have been recorded during this period.
+
+### Water Quality Physical Parameters
+
+Water quality summary table for Maturation Centre; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+Summary statistics are for whole department, histograms have been filtered to display value range for maturation tanks, for greater resolution - individual tank water quality summaries have been included in the appendix. 
+
+``` {r skimWaterQualityPhysicalMC}
+
+# summarise water quality data
+wqp.mat.centre.summary <- maturation.centre %>%
+  skim(temp_am, temp_pm, ph_am, ph_pm, do_am, do_pm, salinity, alkalinity, nh4_am, nh4_pm, nh3_am, nh3_pm, no2_am, no2_pm) %>%
+  mutate(skim_variable = recode(skim_variable, "temp_am" = "Temp AM", "temp_pm" = "Temp PM", "ph_am" = "pH AM", "ph_pm" = "pH PM", "do_am" = "DO AM", "do_pm" = "DO PM", "nh4_am" = "NH[4] AM", "nh4_pm" = "NH[4] PM", "nh3_am" = "Ammonia AM", "nh3_pm" = "Ammonia PM", "no2_am" = "Nitrite AM", "no2_pm" = "Nitrite PM")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqPhysicalMATcentreTable, ft.align = "center"}
+
+wqp.mat.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Physical water quality summary statistics for Maturation Centre department"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+#### Temperature
+
+``` {r matCentreTempAmDates}
+
+mat.centre.temp.am.dates <- maturation.centre %>%
+  filter(!is.na(temp_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreTempPmDates}
+
+mat.centre.temp.pm.dates <- maturation.centre %>%
+  filter(!is.na(temp_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreTemp}
+
+# filter to find number of occurrences of above level pH values
+mat.centre.temp.am.green <- maturation.centre %>%
+  filter(between(temp_am, 27, 30)) %>%
+  select(temp_am)
+
+mat.centre.temp.pm.green <- maturation.centre %>%
+  filter(between(temp_pm, 27, 30)) %>%
+  select(temp_pm)
+
+mat.centre.temp.am.red <- maturation.centre %>%
+  filter(!is.na(temp_am),
+         temp_am < 27 | temp_am > 30) %>%
+  select(temp_am)
+
+mat.centre.temp.pm.red <- maturation.centre %>%
+  filter(!is.na(temp_pm),
+         temp_pm < 27 | temp_pm > 30) %>%
+  select(temp_pm)
+
+```
+
+``` {r matCentreTempSkim}
+
+mat.centre.temp.skim <- maturation.centre %>%
+  filter(!is.na(temp_pm)) %>%
+  group_by(tank) %>%
+  skim(temp_pm) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+Temperature range specified 27-29 ^o^C for maturation and 30 ^o^C for spawning. Values for tank water temperature have been supplied for AM and PM. Temperature has been recorded for; the AM from `r mat.centre.temp.am.dates$min.date` to `r mat.centre.temp.am.dates$max.date` and for the PM from `r mat.centre.temp.pm.dates$min.date` to `r mat.centre.temp.pm.dates$max.date`.  
+
+Occurrence of recorded temperature values within specified range; AM `r length(mat.centre.temp.am.green$temp_am)`, PM `r length(mat.centre.temp.pm.green$temp_pm)`.  
+
+Occurrence of recorded temperature values outside of specified range; AM `r length(mat.centre.temp.am.red$temp_am)`, PM `r length(mat.centre.temp.pm.red$temp_pm)`
+
+Percentage of recorded temperature values within range; AM `r format(length(mat.centre.temp.am.green$temp_am) / (length(mat.centre.temp.am.green$temp_am) + length(mat.centre.temp.am.red$temp_am)) * 100, scientific = FALSE, digits = 3)`%, PM `r format(length(mat.centre.temp.pm.green$temp_pm) / (length(mat.centre.temp.pm.green$temp_pm) + length(mat.centre.temp.pm.red$temp_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreTempAmHist, fig.cap = "Manasa Maturation Centre water temperature ^o^C histogram (AM and PM values for maturation tanks), specified range 27-29 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.temp.hist <- maturation.centre %>%
+  filter(tank_catagory == "Maturation") %>%
+  select(c(temp_am, temp_pm)) %>%
+  pivot_longer(cols = c(temp_am, temp_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, temp_am = "am", temp_pm = "pm")) %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.5, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(27, 29.0), linetype = "dashed", color = "lightgreen", size = 1) +
+  labs(x = expression("Temperature " (degree~C)), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.temp.hist
+```
+
+
+A small proportion of recorded values are outside of the specified range. This deviation is unlikely to affect the wellbeing of the shrimp, however it may have implications for growth rate and may interact with proportion of unionised:ionised ammonia that is present in the water. PM temperatures slightly higher than AM values (indication of insufficient building insulation).
+
+``` {r matCentreTank1temp, fig.cap = "Manasa Maturation Centre tank M1 temperature ^o^C time series (pm values) , specified range 29.5 - 32 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.temp.pm.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(temp_pm)) %>%
+  ggplot(aes(date, temp_pm)) +
+  geom_hline(yintercept = c(27, 29), linetype = c("dashed"),
+             color = c("green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Temperature " (degree~C))) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.temp.pm.p
+```
+
+pH values generally within desired range, some elevated values.
+
+Consider: Review of building insulation.
+
+#### pH
+
+``` {r matCentrePhAmDates}
+
+mat.centre.ph.am.dates <- maturation.centre %>%
+  filter(!is.na(ph_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentrePhPmDates}
+
+mat.centre.ph.pm.dates <- maturation.centre %>%
+  filter(!is.na(ph_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentrePh}
+
+# filter to find number of occurrences of above level pH values
+mat.centre.ph.am.green <- maturation.centre %>%
+  filter(between(ph_am, 8, 8.3)) %>%
+  select(ph_am)
+
+mat.centre.ph.pm.green <- maturation.centre %>%
+  filter(between(ph_pm, 8, 8.3)) %>%
+  select(ph_pm)
+
+mat.centre.ph.am.red <- maturation.centre %>%
+  filter(!is.na(ph_am),
+         ph_am < 8 | ph_am > 8.3) %>%
+  select(ph_am)
+
+mat.centre.ph.pm.red <- maturation.centre %>%
+  filter(!is.na(ph_pm),
+         ph_pm < 8 | ph_am > 8.3) %>%
+  select(ph_pm)
+```
+
+``` {r matCentrePhSkim}
+
+mat.centre.ph.skim <- maturation.centre %>%
+  filter(!is.na(ph_am)) %>%
+  group_by(tank) %>%
+  skim(ph_am) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+pH range specified 8.0 - 8.3. Values for tank water pH have been supplied for AM and PM. pH has been recorded for; the AM from `r mat.centre.ph.am.dates$min.date` to `r mat.centre.ph.am.dates$max.date` and for the PM from `r mat.centre.ph.pm.dates$min.date` to `r mat.centre.ph.pm.dates$max.date`. Where charts have been presented, data has been taken from the PM values as they represent the longer data-set.
+
+Occurrence of recorded pH values within specified range; AM `r length(mat.centre.ph.am.green$ph_am)`, PM `r length(mat.centre.ph.pm.green$ph_pm)`.  
+
+Occurrence of recorded pH values outside of specified range; AM `r length(mat.centre.ph.am.red$ph_am)`, PM `r length(mat.centre.ph.pm.red$ph_pm)`
+
+Percentage of recorded values within range; AM `r format(length(mat.centre.ph.am.green$ph_am) / (length(mat.centre.ph.am.green$ph_am) + length(mat.centre.ph.am.red$ph_am)) * 100, scientific = FALSE, digits = 3)`%, PM `r format(length(mat.centre.ph.pm.green$ph_pm) / (length(mat.centre.ph.pm.green$ph_pm) + length(mat.centre.ph.pm.red$ph_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentrePhAmHist, fig.cap = "Manasa Maturation Centre water pH histogram (AM values), specified range 8 - 8.3 (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+mat.centre.ph.hist <- maturation.centre %>%
+  filter(tank_catagory == "Maturation") %>%
+  select(c(ph_am, ph_pm)) %>%
+  pivot_longer(cols = c(ph_am, ph_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, ph_am = "am", ph_pm = "pm")) %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(8, 8.3), linetype = "dashed", color = "lightgreen", size = 1) +
+  labs(x = expression("pH "), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.ph.hist
+```
+
+A significant proportion of recorded values are outside of the specified range, with the peak frequency of values below the limit of the desired range. pH has implications on survival of shrimp. pH influences the proportion of unionised ammonia (in combination with temperature, and influenced by salinity). LC50 for NH~3~-N is reduced at high pH (Barajas FJM et al. 2006. Litopeneaus vannamei (Boone) post-larval survival related to age, temperature, pH and ammonium concentration. Aquaculture research, 37, 492-499).
+AM pH values typically lower than PM values. Possible build-up of dissolved CO~2~ between water exchanges.
+
+``` {r matCentreTank1pH, fig.cap = "Manasa Maturation Centre tank M1 pH time series (AM values) 2, specified range 8.0 - 8.3 (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.ph.am.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(ph_am)) %>%
+  ggplot(aes(date, ph_am)) +
+  geom_hline(yintercept = c(8.0, 8.3), linetype = c("dashed"),
+             color = c("green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("pH")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.ph.am.p
+```
+
+High proportion of values below desired range. pH appears to reduce between water exchanges.
+
+Consider: Increase frequency of water exchanges. pH buffering of reservoir water if ammonia is well controlled.
+
+#### DO
+
+``` {r matCentreDoAmDates}
+
+mat.centre.do.am.dates <- maturation.centre %>%
+  filter(!is.na(do_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreDoPmDates}
+
+mat.centre.do.pm.dates <- maturation.centre %>%
+  filter(!is.na(do_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreDo}
+
+# filter to find number of occurrences of above level pH values
+mat.centre.do.am.green <- maturation.centre %>%
+  filter(do_am >= 5) %>%
+  select(do_am)
+
+mat.centre.do.pm.green <- maturation.centre %>%
+  filter(do_pm >= 5) %>%
+  select(do_pm)
+
+mat.centre.do.am.amber <- maturation.centre %>%
+  filter(do_am <5 & do_am >3) %>%
+  select(do_am)
+
+mat.centre.do.pm.amber <- maturation.centre %>%
+  filter(do_pm <5 & do_pm >3)
+
+mat.centre.do.am.red <- maturation.centre %>%
+  filter(!is.na(do_am),
+         do_am <= 3) %>%
+  select(do_am)
+
+mat.centre.do.pm.red <- maturation.centre %>%
+  filter(!is.na(do_pm),
+         do_pm <= 3) %>%
+  select(do_pm)
+
+mat.centre.do.am.typos <- maturation.centre %>%
+  filter(!is.na(do_am),
+         do_am > 6.8) %>%
+  select(do_am)
+
+mat.centre.do.pm.typos <- maturation.centre %>%
+  filter(!is.na(do_pm),
+         do_pm > 6.8) %>%
+  select(do_pm)
+```
+
+``` {r matCentreDoSkim}
+
+mat.centre.do.skim <- maturation.centre %>%
+  filter(!is.na(do_am)) %>%
+  group_by(tank) %>%
+  skim(do_am) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+Dissolved oxygen (DO) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green >= 5 mg/l, amber < 5 & > 3 mg/l, red <=3 mg/l. Values for tank water DO have been supplied for AM and PM. DO has been recorded for; the AM from `r mat.centre.do.am.dates$min.date` to `r mat.centre.do.am.dates$max.date` and for the PM from `r mat.centre.do.pm.dates$min.date` to `r mat.centre.do.pm.dates$max.date`. 
+
+Occurrence of recorded DO values within green range; am `r length(mat.centre.do.am.green$do_am)`, pm `r length(mat.centre.do.pm.green$do_pm)`.  
+
+Occurrence of recorded pH values within amber range; am `r length(mat.centre.do.am.amber$do_am)`, pm `r length(mat.centre.do.pm.amber$do_pm)`
+
+Occurrence of recorded pH values within red range; am `r length(mat.centre.do.am.red$do_am)`, pm `r length(mat.centre.do.pm.red$do_pm)`
+
+Percentage of recorded values within green range; am `r format(length(mat.centre.do.am.green$do_am) / (length(mat.centre.do.am.green$do_am) + length(mat.centre.do.am.red$do_am) + length(mat.centre.do.am.amber$do_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(mat.centre.do.pm.green$do_pm) / (length(mat.centre.do.pm.green$do_pm) + length(mat.centre.do.pm.red$do_pm) + length(mat.centre.do.pm.amber$do_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+For the temperature and salinity indicated, DO saturation value is `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l. Check calibration / test procedure.
+
+DO values recorded  greater than `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l considered to be entered in error; am `r length(mat.centre.do.am.typos$do_am)` values, pm `r length(mat.centre.do.pm.typos$do_pm)` values.
+
+``` {r matCentreDoAmHist, fig.cap = "Manasa Maturation Centre water dissolved oxygen DO mg/l histogram (AM values), 'green range' ≥ 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+mat.centre.do.hist <- maturation.centre %>%
+  filter(tank_catagory == "Maturation") %>%
+  select(c(do_am, do_pm)) %>%
+  pivot_longer(cols = c(do_am, do_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, do_am = "am", do_pm = "pm")) %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.5, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(3, 5), linetype = c("dotted", "dashed"), color = c("orange", "green"), size = 1) +
+  labs(x = expression("DO mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.do.hist
+```
+
+The majority of DO values are above the 'green' threshold of 5 mg/l. However, due to the recording of values greater than `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)`, there is concern about the accuracy of these records (note secondary peak in histogram indicates possible calibration error).
+
+``` {r matCentreTank1DO, fig.cap = "Manasa Maturation Centre tank M1 dissolved oxygen DO mg/l time series (am values), 'green range' ≤ 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.do.am.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(do_am)) %>%
+  ggplot(aes(date, do_am)) +
+  geom_hline(yintercept = c(3, 5), linetype = c("dotted", "dashed"),
+             color = c("orange", "green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("DO mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.do.am.p
+```
+
+Large proportion of values below desired level.
+
+Consider: Increase water exchange frequency. Calibration/ validation of DO measurements.
+
+#### Salinity
+
+Salinity range 30-33, appears to be within suitable range for shrimp.
+
+Comment: No action currently required.
+
+#### Alkalinity
+
+``` {r matCentreAlkDates}
+
+mat.centre.alk.dates <- maturation.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreAlk}
+
+# filter to find number of occurrences of above level alk values
+mat.centre.alk.green <- maturation.centre %>%
+  filter(between(alkalinity, 140, 160)) %>%
+  select(alkalinity)
+
+mat.centre.alk.amber <- maturation.centre %>%
+  filter(!is.na(alkalinity),
+         alkalinity >= 110 & alkalinity < 140 | alkalinity > 160 & alkalinity <= 200) %>%
+  select(alkalinity)
+
+mat.centre.alk.red <- maturation.centre %>%
+  filter(!is.na(alkalinity),
+         alkalinity < 110 | alkalinity > 200) %>%
+  select(alkalinity)
+
+```
+
+``` {r matCentreAlkalinitySkim}
+
+mat.centre.alkalinity.skim <- maturation.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  group_by(tank) %>%
+  skim(alkalinity) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+Alkalinity range not specified. Have borrowed from traffic light system from SAG Sichon (maturation); green 140-160, amber 110 - < 140 or > 160 - 200, red < 110 or > 200. 
+
+Alkalinity has been recorded; from `r mat.centre.alk.dates$min.date` to `r mat.centre.alk.dates$max.date` 
+
+Occurrence of recorded alkalinity values within green range; `r length(mat.centre.alk.green$alkalinity)`.  
+
+Occurrence of recorded alkalinity values within amber range; `r length(mat.centre.alk.amber$alkalinity)`.
+
+Occurrence of recorded alkalinity values within red range; `r length(mat.centre.alk.red$alkalinity)`.
+
+Percentage of recorded alkalinity values within green range;  `r format(length(mat.centre.alk.green$alkalinity) / (length(mat.centre.alk.green$alkalinity) + length(mat.centre.alk.red$alkalinity) + length(mat.centre.alk.amber$alkalinity)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreAlkHist, fig.cap = "Manasa PL Centre water dissolved alkalinity mg/l histogram, 'green range' 140-160 mg/l (dashed lines are outer boundaries), 'amber range' 110-140 mg/l or 160-200 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 200 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.alk.hist <- maturation.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  ggplot(aes(alkalinity)) +
+  geom_histogram(aes(y=..density..), binwidth = 15, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 15) +
+  geom_vline(xintercept = c(110, 140, 160, 200), linetype = c("dotted", "dashed", "dashed", "dotted"), color = c("orange", "green", "green", "orange"), size = 1) +
+  labs(x = expression("Alkalinity mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.alk.hist
+```
+
+Alkalinity values typically below recommended range.
+
+``` {r matCentreTank1Alk, fig.cap = "Manasa Maturation Centre tank M1 alkalinity mg/l time series, 'green range' 140-160 mg/l (dashed lines are outer boundaries), 'amber range' 110-140 mg/l or 160-200 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 200 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.alk.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(alkalinity)) %>%
+  ggplot(aes(date, alkalinity)) +
+  geom_hline(yintercept = c(110, 140, 160, 200), linetype = c("dotted", "dashed", "dashed", "dotted"),
+             color = c("orange", "green", "green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Alkalinity mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.alk.p
+```
+
+Low alkalinity observed
+
+Consider: Alkalinity dosing - caution, ammonia levels must be well controlled if this is to be performed. 
+
+#### NH~4~-N TAN
+
+``` {r matCentreNH4amDates}
+
+mat.centre.nh4.am.dates <- maturation.centre %>%
+  filter(!is.na(nh4_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNH4pmDates}
+
+mat.centre.nh4.pm.dates <- maturation.centre %>%
+  filter(!is.na(nh4_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNH4}
+
+# filter to find number of occurrences of above level nh4 values
+mat.centre.nh4.am.green <- maturation.centre %>%
+  filter(nh4_am < 1.0) %>%
+  select(nh4_am)
+
+mat.centre.nh4.pm.green <- maturation.centre %>%
+  filter(nh4_pm < 1.0) %>%
+  select(nh4_pm)
+
+mat.centre.nh4.am.amber <- maturation.centre %>%
+  filter(between(nh4_am, 1.0, 3.0)) %>%
+  select(nh4_am)
+
+mat.centre.nh4.pm.amber <- maturation.centre %>%
+  filter(between(nh4_pm, 1.0, 3.0)) %>%
+  select(nh4_pm)
+
+mat.centre.nh4.am.red <- maturation.centre %>%
+  filter(nh4_am > 3) %>%
+  select(nh4_am)
+
+mat.centre.nh4.pm.red <- maturation.centre %>%
+  filter(nh4_pm > 3) %>%
+  select(nh4_pm)
+
+```
+
+``` {r matCentreNH4Skim}
+
+mat.centre.nh4.skim <- maturation.centre %>%
+  filter(!is.na(nh4_am)) %>%
+  group_by(tank) %>%
+  skim(nh4_am) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+NH~4~-N (TAN) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green < 1 mg/l, amber > 1 & < 3 mg/l, red > 3 mg/l. Values for tank water NH~4~ have been supplied for AM and PM. NH~4~ has been recorded for; the AM from `r mat.centre.nh4.am.dates$min.date` to `r mat.centre.nh4.am.dates$max.date` and for the PM from `r mat.centre.nh4.pm.dates$min.date` to `r mat.centre.nh4.pm.dates$max.date`. 
+
+Occurrence of recorded NH~4~ values within green range; am `r length(mat.centre.nh4.am.green$nh4_am)`, pm `r length(mat.centre.nh4.pm.green$nh4_pm)`.  
+
+Occurrence of recorded NH~4~ values within amber range; am `r length(mat.centre.nh4.am.amber$nh4_am)`, pm `r length(mat.centre.nh4.pm.amber$nh4_pm)`
+
+Occurrence of recorded NH~4~ values within red range; am `r length(mat.centre.nh4.am.red$nh4_am)`, pm `r length(mat.centre.nh4.pm.red$nh4_pm)`
+
+Percentage of recorded values within green range; am `r format(length(mat.centre.nh4.am.green$nh4_am) / (length(mat.centre.nh4.am.green$nh4_am) + length(mat.centre.nh4.am.red$nh4_am) + length(mat.centre.nh4.am.amber$nh4_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(mat.centre.nh4.pm.green$nh4_pm) / (length(mat.centre.nh4.pm.green$nh4_pm) + length(mat.centre.nh4.pm.red$nh4_pm) + length(mat.centre.nh4.pm.amber$nh4_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreNH4Hist, fig.cap = "Manasa Maturation Centre water NH~4~-N  mg/l histogram (Am and PM values), 'green range' < 1 mg/l (dashed line is upper boundary), 'amber range' 1 - 3 mg/l (dotted line is upper boundary), 'red range' > 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.nh4.hist <- maturation.centre %>%
+  select(c(nh4_am, nh4_pm)) %>%
+  pivot_longer(cols = c(nh4_am, nh4_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, nh4_am = "am", nh4_pm = "pm")) %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.5, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(1, 3), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression(NH[4]~(mg/l)), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.nh4.hist
+```
+
+Large proportion of NH~4~-N values are above the desired range. AM values slightly higher on average than PM values indicating NH~4~ accumulation between water exchanges.
+
+``` {r matCentreTank1NH4, fig.cap = "Manasa Maturation Centre tank M1 TAN NH~4~-N mg/l time series, 'green range' ≤ 1 mg/l (dashed line is upper boundary), 'amber range' 1-3 mg/l (dotted line is upper boundary), 'red range' > 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.nh4.p <- maturation.centre %>%
+  filter(tank == "M4" & !is.na(nh4_am)) %>%
+  ggplot(aes(date, nh4_am)) +
+  geom_hline(yintercept = c(1, 3), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression(NH[4]~mg/l)) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.nh4.p
+```
+
+Tank M1 NH~4~-N value typically within amber range. Quite likely that pH is playing a regulating role (since pH was observed to be quite low) preventing the ammonia level exceeding the amber level. The TAN level must be maintained below 1 mg/l.
+
+Consider: Increase water exchange volume or frequency. Other options include fundamental system changes (biofloc or clearwater RAS).
+
+#### NH~3~-N
+
+``` {r matCentreNH3amDates}
+
+mat.centre.nh3.am.dates <- maturation.centre %>%
+  filter(!is.na(nh3_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNH3pmDates}
+
+mat.centre.nh3.pm.dates <- maturation.centre %>%
+  filter(!is.na(nh3_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNH3}
+
+# filter to find number of occurrences of above level nh4 values
+mat.centre.nh3.am.green <- maturation.centre %>%
+  filter(nh3_am < 0.16) %>%
+  select(nh3_am)
+
+mat.centre.nh3.pm.green <- maturation.centre %>%
+  filter(nh3_pm < 0.16) %>%
+  select(nh3_pm)
+
+mat.centre.nh3.am.amber <- maturation.centre %>%
+  filter(between(nh3_am, 0.16, 0.3)) %>%
+  select(nh3_am)
+
+mat.centre.nh3.pm.amber <- maturation.centre %>%
+  filter(between(nh3_pm, 0.16, 0.3)) %>%
+  select(nh3_pm)
+
+mat.centre.nh3.am.red <- maturation.centre %>%
+  filter(nh3_am > 0.3) %>%
+  select(nh3_am)
+
+mat.centre.nh3.pm.red <- maturation.centre %>%
+  filter(nh3_pm > 0.3) %>%
+  select(nh3_pm)
+
+```
+
+``` {r matCentreNH3Skim}
+
+mat.centre.nh3.skim <- maturation.centre %>%
+  filter(!is.na(nh3_am)) %>%
+  group_by(tank) %>%
+  skim(nh3_am) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+NH~3~-N range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green < 0.16 mg/l, amber > 0.16 & < 0.3 mg/l, red > 0.3 mg/l. Values for tank water NH~3~ have been supplied for AM and PM. NH~3~ has been recorded for; the AM from `r mat.centre.nh3.am.dates$min.date` to `r mat.centre.nh3.am.dates$max.date` and for the PM from `r mat.centre.nh3.pm.dates$min.date` to `r mat.centre.nh3.pm.dates$max.date`. 
+
+Occurrence of recorded NH~3~ values within green range; am `r length(mat.centre.nh3.am.green$nh3_am)`, pm `r length(mat.centre.nh3.pm.green$nh3_pm)`.  
+
+Occurrence of recorded NH~3~ values within amber range; am `r length(mat.centre.nh3.am.amber$nh3_am)`, pm `r length(mat.centre.nh3.pm.amber$nh3_pm)`
+
+Occurrence of recorded NH~3~ values within red range; am `r length(mat.centre.nh3.am.red$nh3_am)`, pm `r length(mat.centre.nh3.pm.red$nh3_pm)`
+
+Percentage of recorded values within green range; am `r format(length(mat.centre.nh3.am.green$nh3_am) / (length(mat.centre.nh3.am.green$nh3_am) + length(mat.centre.nh3.am.red$nh3_am) + length(mat.centre.nh3.am.amber$nh3_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(mat.centre.nh3.pm.green$nh3_pm) / (length(mat.centre.nh3.pm.green$nh3_pm) + length(mat.centre.nh3.pm.red$nh3_pm) + length(mat.centre.nh3.pm.amber$nh3_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreNH3Hist, fig.cap = "Manasa Maturation Centre water NH~3~-N  mg/l histogram (AM and PM values), 'green range' < 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.nh3.hist <- maturation.centre %>%
+  select(c(nh3_am, nh3_pm)) %>%
+  pivot_longer(cols = c(nh3_am, nh3_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, nh3_am = "am", nh3_pm = "pm")) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression(NH[3]~(mg/l)), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.nh3.hist
+```
+
+NH~3~ values typically within desired range. Note this may be due to low pH values that shift ammonia to the ionised form.
+
+``` {r matCentreTank1NH3, fig.cap = "Manasa Maturation Centre tank M1 ammonia NH~3~-N mg/l time series, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.nh3.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(nh3_am)) %>%
+  ggplot(aes(date, nh3_am)) +
+  geom_hline(yintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression(NH[3]~mg/l)) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.nh3.p
+```
+
+NH~3~ Typically within 'green' classification. NH~3~ values at risk of exceeding safe levels if pH fluctuates (the pH range for this tank was 7.7 - 8.2, this pH change would represent an approximate doubling of unionised ammonia present).
+
+Consider: Increase water exchange volume or frequency as appropriate.
+
+#### Nitrite
+
+``` {r matCentreNO2amDates}
+
+mat.centre.no2.am.dates <- maturation.centre %>%
+  filter(!is.na(no2_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNO2pmDates}
+
+mat.centre.no2.pm.dates <- maturation.centre %>%
+  filter(!is.na(no2_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreNO2}
+
+# filter to find number of occurrences of above level no2 values
+mat.centre.no2.am.green <- maturation.centre %>%
+  filter(no2_am < 0.5) %>%
+  select(no2_am)
+
+mat.centre.no2.pm.green <- maturation.centre %>%
+  filter(no2_pm < 0.5) %>%
+  select(no2_pm)
+
+mat.centre.no2.am.amber <- maturation.centre %>%
+  filter(between(no2_am, 0.5, 0.8)) %>%
+  select(no2_am)
+
+mat.centre.no2.pm.amber <- maturation.centre %>%
+  filter(between(no2_pm, 0.5, 0.8)) %>%
+  select(no2_pm)
+
+mat.centre.no2.am.red <- maturation.centre %>%
+  filter(no2_am > 0.8) %>%
+  select(no2_am)
+
+mat.centre.no2.pm.red <- maturation.centre %>%
+  filter(no2_pm > 0.8) %>%
+  select(no2_pm)
+
+```
+
+``` {r matCentreNO2Skim}
+
+mat.centre.no2.skim <- maturation.centre %>%
+  filter(!is.na(no2_am)) %>%
+  group_by(tank) %>%
+  skim(no2_am) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+NO~2~-N range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green < 0.5 mg/l, amber 0.5 - 0.8 mg/l, red > 0.8 mg/l. Values for tank water NO~2~ have been supplied for AM and PM. NO~2~ has been recorded for; the AM from `r mat.centre.no2.am.dates$min.date` to `r mat.centre.no2.am.dates$max.date` and for the PM from `r mat.centre.no2.pm.dates$min.date` to `r mat.centre.no2.pm.dates$max.date`. 
+
+Occurrence of recorded NO~2~ values within green range; am `r length(mat.centre.no2.am.green$no2_am)`, pm `r length(mat.centre.no2.pm.green$no2_pm)`.  
+
+Occurrence of recorded NO~2~ values within amber range; am `r length(mat.centre.no2.am.amber$no2_am)`, pm `r length(mat.centre.no2.pm.amber$no2_pm)`
+
+Occurrence of recorded NH~3~ values within red range; am `r length(mat.centre.no2.am.red$no2_am)`, pm `r length(mat.centre.no2.pm.red$no2_pm)`
+
+Percentage of recorded values within green range; am `r format(length(mat.centre.no2.am.green$no2_am) / (length(mat.centre.no2.am.green$no2_am) + length(mat.centre.no2.am.red$no2_am) + length(mat.centre.no2.am.amber$no2_am)) * 100, scientific = FALSE, digits = 3)`%, pm `r format(length(mat.centre.no2.pm.green$no2_pm) / (length(mat.centre.no2.pm.green$no2_pm) + length(mat.centre.no2.pm.red$no2_pm) + length(mat.centre.nh3.pm.amber$no2_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreNO2Hist, fig.cap = "Manasa Maturation Centre water NO~2~-N  mg/l histogram (AM and PM values), 'green range' < 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.no2.hist <- maturation.centre %>%
+  select(c(no2_am, no2_pm)) %>%
+  pivot_longer(cols = c(no2_am, no2_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, no2_am = "am", no2_pm = "pm")) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.4, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.4) +
+  geom_vline(xintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression(NO[2]~(mg/l)), y = "Relative Frequency") +
+  theme_minimal()
+
+mat.centre.no2.hist
+```
+
+Proportion of nitrite values above desired level, more prevalent in AM values - indicating accumulation of nitrite between water exchanges.
+
+``` {r matCentreTank1NO2, fig.cap = "Manasa Maturation Centre tank M1 nitrite NO~2~-N mg/l time series (AM values), 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.no2.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(no2_am)) %>%
+  ggplot(aes(date, no2_am)) +
+  geom_hline(yintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression(NO[2]~mg/l)) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.no2.p
+```
+
+Large proportion of nitrite values above safe level.
+
+Consider: Increase water exchange volume or frequency as appropriate.
+
+### Water Quality Biological Parameters
+
+Water quality summary table for Maturation Centre; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+``` {r skimWaterQualityBiologicalMAT}
+
+# summarise water quality data
+wqb.mat.centre.summary <- maturation.centre %>% 
+  skim(yvc, gvc) %>%
+  mutate(skim_variable = recode(skim_variable, "gvc" = "Green vibrio count", "yvc" = "Yellow vibrio count")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqBiologicalMATcentreTable, ft.align = "center"}
+
+wqb.mat.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Biological water quality summary statistics for Maturation Centre department."), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+#### Green vibrio count
+
+``` {r matCentreGVCDates}
+
+mat.centre.gvc.dates <- maturation.centre %>%
+  filter(!is.na(gvc)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreGVC}
+
+# filter to find number of occurrences of above level gvc values
+mat.centre.gvc.green <- maturation.centre %>%
+  filter(gvc < 80) %>%
+  select(gvc)
+
+mat.centre.gvc.amber <- maturation.centre %>%
+  filter(between(gvc, 80, 100)) %>%
+  select(gvc)
+
+mat.centre.gvc.red <- maturation.centre %>%
+  filter(gvc > 100) %>%
+  select(gvc)
+
+```
+
+``` {r matCentreGVCSkim}
+
+mat.centre.gvc.skim <- maturation.centre %>%
+  filter(!is.na(gvc)) %>%
+  group_by(tank) %>%
+  skim(gvc) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+GVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <80 CFU/ml, amber 80-100 CFU/ml, red >100 CFU/ml.
+
+GVC has been recorded from `r mat.centre.gvc.dates$min.date` to `r mat.centre.gvc.dates$max.date`  
+
+Occurrence of recorded GVC values within green range; `r length(mat.centre.gvc.green$gvc)`.
+
+Occurrence of recorded GVC values within amber range; `r length(mat.centre.gvc.amber$gvc)`.
+
+Occurrence of recorded GVC values within red range; `r length(mat.centre.gvc.red$gvc)`.
+
+Percentage of recorded GVC values within green range; `r format(length(mat.centre.gvc.green$gvc) / (length(mat.centre.gvc.green$gvc) + length(mat.centre.gvc.red$gvc) + length(mat.centre.gvc.amber$gvc)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreGVCHist, fig.cap = "Manasa Maturation Centre water GVC histogram, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+mat.centre.gvc.hist <- maturation.centre %>%
+  filter(!is.na(gvc)) %>%
+  ggplot(aes(gvc)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("GVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+mat.centre.gvc.hist
+```
+
+Large proportion of Green vibrio counts aboved desired level. Likely source of vibrio raw/ live feeds. 
+
+
+
+``` {r matCentreTank1Gvc, fig.cap = "Manasa Maturation Centre tank M1 GVC time series, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.gvc.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(gvc)) %>%
+  ggplot(aes(date, gvc)) + 
+  scale_y_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("Date") ,y = expression("GVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.gvc.p
+```
+
+Majority of values are above 'green' and 'amber' classification.
+
+Consider: Investigate source of GVC and treat if possible. Minimise risk to livestock by ensuring appropriate water quality. 
+
+#### Yellow vibrio count
+
+``` {r matCentreYVCDates}
+
+mat.centre.yvc.dates <- maturation.centre %>%
+  filter(!is.na(yvc)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r matCentreYVC}
+
+# filter to find number of occurrences of above level gvc values
+mat.centre.yvc.green <- maturation.centre %>%
+  filter(yvc < 1000) %>%
+  select(yvc)
+
+mat.centre.yvc.amber <- maturation.centre %>%
+  filter(between(yvc, 1000, 10000)) %>%
+  select(yvc)
+
+mat.centre.yvc.red <- maturation.centre %>%
+  filter(yvc > 10000) %>%
+  select(yvc)
+
+```
+
+``` {r matCentreYVCSkim}
+
+mat.centre.yvc.skim <- maturation.centre %>%
+  filter(!is.na(yvc)) %>%
+  group_by(tank) %>%
+  skim(yvc) %>%
+  arrange(match(tank, c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12", "H13", "H14", "H15", "H16", "Q1", "Q2", "Q3", "Q4")), desc(tank))
+```
+
+YVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <1000 CFU/ml, amber 1000-10,000 CFU/ml, red >10,000 CFU/ml.
+
+YVC has been recorded from `r mat.centre.yvc.dates$min.date` to `r mat.centre.yvc.dates$max.date`  
+
+Occurrence of recorded YVC values within green range; `r length(mat.centre.yvc.green$yvc)`.
+
+Occurrence of recorded YVC values within amber range; `r length(mat.centre.yvc.amber$yvc)`.
+
+Occurrence of recorded YVC values within red range; `r length(mat.centre.yvc.red$yvc)`.
+
+Percentage of recorded YVC values within green range; `r format(length(mat.centre.yvc.green$yvc) / (length(mat.centre.yvc.green$yvc) + length(mat.centre.yvc.red$yvc) + length(mat.centre.yvc.amber$yvc)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r matCentreYVCHist, fig.cap = "Manasa Maturation Centre water YVC histogram, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+mat.centre.yvc.hist <- maturation.centre %>%
+  filter(!is.na(yvc)) %>%
+  ggplot(aes(yvc)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("YVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+mat.centre.yvc.hist
+```
+
+Majority of yvc counts within 'green' range, a substantial proportion within the amber range.
+
+``` {r matCentreTank1Yvc, fig.cap = "Manasa Maturation Centre tank 1 YVC time series, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.yvc.p <- maturation.centre %>%
+  filter(tank == "M1" & !is.na(yvc)) %>%
+  ggplot(aes(date, yvc)) + 
+  scale_y_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("") ,y = expression("YVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+mat.centre.tank1.yvc.p
+```
+
+Majority of yvc counts within 'green' range, a substantial proportion within the amber range.
+
+Consider: Investigate source of GVC and treat if possible. Minimise risk to livestock by ensuring appropriate water quality.
+
+## Broodstock Maturation Centre (BMC)
+
+A data-set containing water quality parameters was supplied covering the period `r min(bmc.centre$date)` to `r max(bmc.centre$date)`, a total of `r max(bmc.centre$date) - min(bmc.centre$date)` days. Not all parameters have been recorded during this period.
+
+### Water Quality Physical Parameters
+
+Water quality summary table for BMC; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+``` {r skimWaterQualityPhysicalBMC}
+
+# summarise water quality data
+wqp.bmc.centre.summary <- bmc.centre %>%
+  skim(salinity, temp_am, temp_pm, ph_am, do, alkalinity, nh3_am, no2, no3, ) %>%
+  mutate(skim_variable = recode(skim_variable, "salinity" = "Salinity", "temp_am" = "Temp AM", "temp_pm" = "Temp PM", "ph_am" = "pH AM", "do" = "DO", "alkalinity_am" = "Alkalinity AM", "nh3" = "Ammonia NH[3]", "no2" = "Nitrite",  "no3" = "Nitrate")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqPhysicalBMCcentreTable, ft.align = "center"}
+
+wqp.bmc.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Physical water quality summary statistics for BMC Centre department"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+#### Salinity
+
+``` {r bmcCentreSalinityDates}
+
+bmc.centre.salinity.dates <- bmc.centre %>%
+  filter(!is.na(salinity)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreSalinity}
+
+# filter to find number of occurrences of above level pH values
+bmc.centre.salinity.green <- bmc.centre %>%
+  filter(between(salinity, 32, 33)) %>%
+  select(salinity)
+
+bmc.centre.salinity.red <- bmc.centre %>%
+  filter(!is.na(salinity),
+         salinity < 27 | salinity > 30) %>%
+  select(salinity)
+
+```
+
+``` {r bmcCentreSalinitySkim}
+
+bmc.centre.salinity.skim <- bmc.centre %>%
+  filter(!is.na(salinity)) %>%
+  group_by(tank_id) %>%
+  skim(salinity) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Salinity range specified 32-33 ppt for BMC. Salinity has been recorded from `r bmc.centre.salinity.dates$min.date` to `r bmc.centre.salinity.dates$max.date`.  
+
+Occurrence of recorded salinity values within specified range; `r length(bmc.centre.salinity.green$salinity)`.  
+
+Occurrence of recorded temperature values outside of specified range; `r length(bmc.centre.salinity.red$salinity)`.
+
+Percentage of recorded temperature values within range; `r format(length(bmc.centre.salinity.green$salinity) / (length(bmc.centre.salinity.green$salinity) + length(bmc.centre.salinity.red$salinity)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreSalinityHist, fig.cap = "Manasa Broodstock Maturation Centre water salinity ppt histogram, specified range 32 - 33 ppt (dashed lines are outer boundaries).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.salinity.hist <- bmc.centre %>%
+  filter(!is.na(salinity)) %>%
+  ggplot(aes(salinity)) +
+  geom_histogram(aes(y=..density..), binwidth = 1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 1) +
+  geom_vline(xintercept = c(32, 33), linetype = c("dashed", "dashed"), color = c( "green", "green"), size = 1) +
+  labs(x = expression("Salinity ppt"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.salinity.hist
+```
+
+``` {r bmcCentreTank1Salinity, fig.cap = "Manasa BMC tank B1 Salinity ppt time series, specified range 32 - 33 ppt (dashed lines are outer boundaries).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.salinity.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(salinity)) %>%
+  ggplot(aes(date, salinity)) +
+  geom_hline(yintercept = c(32, 33), linetype = c("dashed", "dashed"),
+             color = c("green", "green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Salinity ppt")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.salinity.p
+```
+
+#### Temperature
+
+``` {r bmcCentreTempAmDates}
+
+bmc.centre.temp.am.dates <- bmc.centre %>%
+  filter(!is.na(temp_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreTempPmDates}
+
+bmc.centre.temp.pm.dates <- bmc.centre %>%
+  filter(!is.na(temp_pm)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreTemp}
+
+# filter to find number of occurrences of above level pH values
+bmc.centre.temp.am.green <- bmc.centre %>%
+  filter(between(temp_am, 27, 29)) %>%
+  select(temp_am)
+
+bmc.centre.temp.pm.green <- bmc.centre %>%
+  filter(between(temp_pm, 27, 29)) %>%
+  select(temp_pm)
+
+bmc.centre.temp.am.red <- bmc.centre %>%
+  filter(!is.na(temp_am),
+         temp_am < 27 | temp_am > 29) %>%
+  select(temp_am)
+
+bmc.centre.temp.pm.red <- bmc.centre %>%
+  filter(!is.na(temp_pm),
+         temp_pm < 27 | temp_pm > 29) %>%
+  select(temp_pm)
+
+```
+
+``` {r bmcCentreTempSkim}
+
+bmc.centre.temp.skim <- bmc.centre %>%
+  filter(!is.na(temp_pm)) %>%
+  group_by(tank_id) %>%
+  skim(temp_pm) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Temperature range specified 27-29 ^o^C for maturation. Values for tank water temperature have been supplied for AM and PM. Temperature has been recorded for; the AM from `r bmc.centre.temp.am.dates$min.date` to `r bmc.centre.temp.am.dates$max.date` and for the PM from `r bmc.centre.temp.pm.dates$min.date` to `r bmc.centre.temp.pm.dates$max.date`.  
+
+Occurrence of recorded temperature values within specified range; AM `r length(bmc.centre.temp.am.green$temp_am)`, PM `r length(bmc.centre.temp.pm.green$temp_pm)`.  
+
+Occurrence of recorded temperature values outside of specified range; AM `r length(bmc.centre.temp.am.red$temp_am)`, PM `r length(bmc.centre.temp.pm.red$temp_pm)`
+
+Percentage of recorded temperature values within range; AM `r format(length(bmc.centre.temp.am.green$temp_am) / (length(bmc.centre.temp.am.green$temp_am) + length(bmc.centre.temp.am.red$temp_am)) * 100, scientific = FALSE, digits = 3)`%, PM `r format(length(bmc.centre.temp.pm.green$temp_pm) / (length(bmc.centre.temp.pm.green$temp_pm) + length(bmc.centre.temp.pm.red$temp_pm)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreTempHist, fig.cap = "Manasa BMC water temperature ^o^C histogram (AM and PM values for maturation tanks), specified range 27-29 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.temp.hist <- bmc.centre %>%
+  select(c(temp_am, temp_pm)) %>%
+  pivot_longer(cols = c(temp_am, temp_pm), names_to = "sample_time", values_to = "value") %>%
+  mutate(sample_time = recode(sample_time, temp_am = "am", temp_pm = "pm")) %>%
+  filter(!is.na(value)) %>%
+  ggplot(aes(x = value, color = sample_time, fill = sample_time, position = "dodge")) +
+  geom_histogram(aes(y=..density..), binwidth = 0.5, alpha = 0.4, position = "identity") +
+  scale_color_manual(values=c("#dfc27d","#80cdc1"), guide = "none") +
+  scale_fill_manual(name = "", labels = c("AM", "PM"), values=c("#dfc27d","#80cdc1")) +
+  geom_density(alpha = 0.2, bw = 0.5) +
+  geom_vline(xintercept = c(27, 29.0), linetype = "dashed", color = "lightgreen", size = 1) +
+  labs(x = expression("Temperature " (degree~C)), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.temp.hist
+```
+
+``` {r bmcCentreTank1temp, fig.cap = "Manasa BMC tank 1 temperature ^o^C time series (pm values), specified range 27 - 29 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.temp.am.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(temp_am)) %>%
+  ggplot(aes(date, temp_am)) +
+  geom_hline(yintercept = c(27, 29), linetype = c("dashed"),
+             color = c("green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Temperature " (degree~C))) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.temp.am.p
+```
+
+#### pH
+
+``` {r bmcCentrePhDates}
+
+bmc.centre.ph.dates <- bmc.centre %>%
+  filter(!is.na(ph_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentrePh}
+
+# filter to find number of occurrences of above level pH values
+bmc.centre.ph.green <- bmc.centre %>%
+  filter(between(ph_am, 8, 8.3)) %>%
+  select(ph_am)
+
+bmc.centre.ph.red <- bmc.centre %>%
+  filter(!is.na(ph_am),
+         ph_am < 8 | ph_am > 8.3) %>%
+  select(ph_am)
+
+```
+
+``` {r bmcCentrePhSkim}
+
+bmc.centre.ph.skim <- bmc.centre %>%
+  filter(!is.na(ph_am)) %>%
+  group_by(tank_id) %>%
+  skim(ph_am) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+pH range specified 8 - 8.3 ppt for BMC. Salinity has been recorded from `r bmc.centre.ph.dates$min.date` to `r bmc.centre.ph.dates$max.date`.  
+
+Occurrence of recorded salinity values within specified range; `r length(bmc.centre.ph.green$ph_am)`.  
+
+Occurrence of recorded temperature values outside of specified range; `r length(bmc.centre.ph.red$ph_am)`.
+
+Percentage of recorded temperature values within range; `r format(length(bmc.centre.ph.green$ph_am) / (length(bmc.centre.ph.green$ph_am) + length(bmc.centre.ph.red$ph_am)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentrePhHist, fig.cap = "Manasa Broodstock Maturation Centre water pH histogram, specified range 8 - 8.3 (dashed lines are outer boundaries).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.ph.hist <- bmc.centre %>%
+  filter(!is.na(ph_am)) %>%
+  ggplot(aes(ph_am)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(8, 8.3), linetype = c("dashed", "dashed"), color = c( "green", "green"), size = 1) +
+  labs(x = expression("pH"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.ph.hist
+```
+
+``` {r bmcCentreTank1pH, fig.cap = "Manasa BMC tank B1 pH time series, specified range 8 - 8.3 (dashed lines are outer boundaries).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.ph.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(ph_am)) %>%
+  ggplot(aes(date, ph_am)) +
+  geom_hline(yintercept = c(8, 8.3), linetype = c("dashed", "dashed"),
+             color = c("green", "green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("pH")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.ph.p
+```
+
+#### Dissolved oxygen DO
+
+``` {r bmcCentreDODates}
+
+bmc.centre.do.dates <- bmc.centre %>%
+  filter(!is.na(do)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreDO}
+
+# filter to find number of occurrences of above level pH values
+bmc.centre.do.green <- bmc.centre %>%
+  filter(do >= 5) %>%
+  select(do)
+
+bmc.centre.do.amber <- bmc.centre %>%
+  filter(between(do, 3, 5)) %>%
+  select(do)
+
+bmc.centre.do.red <- bmc.centre %>%
+  filter(!is.na(do),
+         do < 3) %>%
+  select(do)
+
+bmc.centre.do.typos <- bmc.centre %>%
+  filter(!is.na(do),
+         do < oxygen.calculator(28, 28)) %>%
+  select(do)
+
+```
+
+``` {r bmcCentreDOSkim}
+
+bmc.centre.do.skim <- bmc.centre %>%
+  filter(!is.na(do)) %>%
+  group_by(tank_id) %>%
+  skim(do) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+  
+```
+
+Dissolved oxygen (DO) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green >= 5 mg/l, amber < 5 & > 3 mg/l, red <=3 mg/l. Values for tank water DO have been supplied for the AM. 
+
+DO has been recorded for; the AM from `r bmc.centre.do.dates$min.date` to `r bmc.centre.do.dates$max.date`. 
+
+Occurrence of recorded DO values within green range; `r length(bmc.centre.do.green$do)`.  
+
+Occurrence of recorded pH values within amber range; `r length(bmc.centre.do.amber$do)`.
+
+Occurrence of recorded pH values within red range; `r length(bmc.centre.do.red$do)`.
+
+Percentage of recorded values within green range: `r format(length(bmc.centre.do.green$do) / (length(bmc.centre.do.green$do) + length(bmc.centre.do.red$do) + length(bmc.centre.do.amber$do)) * 100, scientific = FALSE, digits = 3)`%.
+
+For the temperature and salinity indicated, DO saturation value is `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l. Check calibration / test procedure.
+
+DO values recorded  greater than `r format(oxygen.calculator(28, 28), scientific = FALSE, digits = 3)` mg/l considered to be entered in error; am `r length(bmc.centre.do.typos$do)` values
+
+``` {r bmcCentreDoHist, fig.cap = "Manasa Broodstock Maturation Centre water dissolved oxygen mg/l histogram,  'green range' ≥ 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.do.hist <- bmc.centre %>%
+  filter(!is.na(do)) %>%
+  ggplot(aes(do)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(3, 5), linetype = c("dotted", "dashed"), color = c( "orange", "green"), size = 1) +
+  labs(x = expression("DO mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.do.hist
+```
+
+``` {r bmcCentreTank1DO, fig.cap = "Manasa BMC tank B1 dissolved oxygen DO mg/l time series,   'green range' ≥ 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.do.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(do)) %>%
+  ggplot(aes(date, do)) +
+  geom_hline(yintercept = c(3, 5), linetype = c("dotted", "dashed"),
+             color = c("orange", "green"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("DO mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.do.p
+```
+
+#### Alkalinity
+
+``` {r bmcCentreAlkDates}
+
+bmc.centre.alk.dates <- bmc.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreAlk}
+
+# filter to find number of occurrences of above level alk values
+bmc.centre.alk.green <- bmc.centre %>%
+  filter(between(alkalinity, 140, 160)) %>%
+  select(alkalinity)
+
+bmc.centre.alk.amber <- bmc.centre %>%
+  filter(!is.na(alkalinity),
+         alkalinity >= 110 & alkalinity < 140 | alkalinity > 160 & alkalinity <= 200) %>%
+  select(alkalinity)
+
+bmc.centre.alk.red <- bmc.centre %>%
+  filter(!is.na(alkalinity),
+         alkalinity < 110 | alkalinity > 200) %>%
+  select(alkalinity)
+
+```
+
+``` {r bmcCentreAlkalinitySkim}
+
+bmc.centre.alkalinity.skim <- bmc.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  group_by(tank_id) %>%
+  skim(alkalinity) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Alkalinity range not specified. Have borrowed from traffic light system from SAG Sichon (maturation); green 140-160, amber 110 - < 140 or > 160 - 200, red < 110 or > 200. 
+
+Alkalinity has been recorded; from `r bmc.centre.alk.dates$min.date` to `r bmc.centre.alk.dates$max.date` 
+
+Occurrence of recorded alkalinity values within green range; `r length(bmc.centre.alk.green$alkalinity)`.  
+
+Occurrence of recorded alkalinity values within amber range; `r length(bmc.centre.alk.amber$alkalinity)`.
+
+Occurrence of recorded alkalinity values within red range; `r length(bmc.centre.alk.red$alkalinity)`.
+
+Percentage of recorded alkalinity values within green range;  `r format(length(bmc.centre.alk.green$alkalinity) / (length(bmc.centre.alk.green$alkalinity) + length(bmc.centre.alk.red$alkalinity) + length(bmc.centre.alk.amber$alkalinity)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreAlkHist, fig.cap = "Manasa BMC water dissolved alkalinity mg/l histogram, 'green range' 140-160 mg/l (dashed lines are outer boundaries), 'amber range' 110-140 mg/l or 160-200 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 200 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.alk.hist <- bmc.centre %>%
+  filter(!is.na(alkalinity)) %>%
+  ggplot(aes(alkalinity)) +
+  geom_histogram(aes(y=..density..), binwidth = 15, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 15) +
+  geom_vline(xintercept = c(110, 140, 160, 200), linetype = c("dotted", "dashed", "dashed", "dotted"), color = c("orange", "green", "green", "orange"), size = 1) +
+  labs(x = expression("Alkalinity mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.alk.hist
+```
+
+``` {r bmcCentreTank1Alk, fig.cap = "Manasa BMC tank B1 dissolved alkalinity mg/l time series,'green range' 140-160 mg/l (dashed lines are outer boundaries), 'amber range' 110-140 mg/l or 160-200 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 200 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.alkalinity.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(alkalinity)) %>%
+  ggplot(aes(date, alkalinity)) +
+  geom_hline(yintercept = c(110, 140, 160, 200), linetype = c("dotted", "dashed", "dashed", "dotted"),
+             color = c("orange", "green", "green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Alkalinity mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.alkalinity.p
+```
+
+#### Ammonia NH~3~-N
+
+``` {r bmcCentreNH3Dates}
+
+bmc.centre.nh3.dates <- bmc.centre %>%
+  filter(!is.na(nh3_am)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreNH3}
+
+# filter to find number of occurrences of above level nh4 values
+bmc.centre.nh3.green <- bmc.centre %>%
+  filter(nh3_am < 0.16) %>%
+  select(nh3_am)
+
+bmc.centre.nh3.amber <- bmc.centre %>%
+  filter(between(nh3_am, 0.16, 0.3)) %>%
+  select(nh3_am)
+
+bmc.centre.nh3.red <- bmc.centre %>%
+  filter(nh3_am > 0.3) %>%
+  select(nh3_am)
+
+bmc.centre.nh3.typos <- bmc.centre %>%
+  filter(nh3_am > 1) %>%
+  select(nh3_am)
+```
+
+``` {r bmcCentreNH3Skim}
+
+bmc.centre.nh3.skim <- bmc.centre %>%
+  filter(!is.na(nh3_am)) %>%
+  group_by(tank_id) %>%
+  skim(nh3_am) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Ammonia (NH~3~) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green < 0.16 mg/l, amber 0.16 - 0.3 mg/l, red > 0.3 mg/l. Ammonia has been recorded from `r bmc.centre.nh3.dates$min.date` to `r bmc.centre.nh3.dates$max.date`.
+
+Occurrence of recorded ammonia values within green range; `r length(bmc.centre.nh3.green$nh3_am)`.
+
+Occurrence of recorded ammonia values within amber range; `r length(bmc.centre.nh3.amber$nh3_am)`.
+
+Occurrence of recorded ammonia values within red range; `r length(bmc.centre.nh3.red$nh3_am)`.
+
+Percentage of recorded ammonia values within green range; `r format(length(bmc.centre.nh3.green$nh3_am) / (length(bmc.centre.nh3.green$nh3_am) + length(bmc.centre.nh3.red$nh3_am) + length(bmc.centre.nh3.amber$nh3_am)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreNH3Hist, fig.cap = "Manasa BMC water ammonia - (NH~3~-N) mg/l  histogram, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.nh3.hist <- bmc.centre %>%
+  filter(!is.na(nh3_am)) %>%
+  ggplot(aes(nh3_am)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.1) +
+  geom_vline(xintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("Ammonia mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.nh3.hist
+```
+
+``` {r bmcCentreTank1NH3, fig.cap = "Manasa BMC tank B1 ammonia NH~3~-N mg/l time series, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.nh3.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(nh3_am)) %>%
+  ggplot(aes(date, nh3_am)) +
+  geom_hline(yintercept = c(0.16, 0.3), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("Date") ,y = expression("Ammonia mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.nh3.p
+```
+
+#### Nitrite
+
+``` {r bmcCentreNO2Dates}
+
+bmc.centre.no2.dates <- bmc.centre %>%
+  filter(!is.na(no2)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreNO2}
+
+# filter to find number of occurrences of above level nh4 values
+bmc.centre.no2.green <- bmc.centre %>%
+  filter(no2 < 0.5) %>%
+  select(no2)
+
+bmc.centre.no2.amber <- bmc.centre %>%
+  filter(between(no2, 0.5, 0.8)) %>%
+  select(no2)
+
+bmc.centre.no2.red <- bmc.centre %>%
+  filter(no2 > 0.8) %>%
+  select(no2)
+
+```
+
+``` {r bmcCentreNO2Skim}
+
+bmc.centre.no2.skim <- bmc.centre %>%
+  filter(!is.na(no2)) %>%
+  group_by(tank_id) %>%
+  skim(no2) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Nitrite (NO~2~) range not specified in information supplied. Have borrowed from traffic light system from SAG Sichon; green <0.5, amber 0.50 - 0.8, red > 0.8. 
+
+Nitrite has been recorded from `r bmc.centre.no2.dates$min.date` to `r bmc.centre.no2.dates$max.date`  
+
+Occurrence of recorded nitrite values within green range; `r length(bmc.centre.no2.green$no2)`.
+
+Occurrence of recorded nitrite values within amber range; `r length(bmc.centre.no2.amber$no2)`.
+
+Occurrence of recorded nitrite values within red range; `r length(bmc.centre.no2.red$no2)`.
+
+Percentage of recorded nitrite values within green range; `r format(length(bmc.centre.no2.green$no2) / (length(bmc.centre.no2.green$no2) + length(bmc.centre.no2.red$no2) + length(bmc.centre.no2.amber$no2)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreNO2Hist, fig.cap = "Manasa BMC water nitrite - NO~2~-N mg/l histogram, 'green range' ≤ 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.no2.hist <- bmc.centre %>%
+  filter(!is.na(no2),
+         no2 <= 3) %>%
+  ggplot(aes(no2)) +
+  geom_histogram(aes(y=..density..), binwidth = 0.2, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 0.2) +
+  geom_vline(xintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("Nitrite mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.no2.hist
+```
+
+``` {r bmcCentreTank1NO2, fig.cap = "Manasa BMC tank B1 nitrite NO~2~-N mg/l time series, 'green range' ≤ 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.no2.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(no2)) %>%
+  ggplot(aes(date, no2)) +
+  geom_hline(yintercept = c(0.5, 0.8), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("Date") ,y = expression("Nitrite mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.no2.p
+```
+
+#### Nitrate
+
+``` {r bmcCentreNO3Dates}
+
+bmc.centre.no3.dates <- bmc.centre %>%
+  filter(!is.na(no3)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreNO3}
+
+# filter to find number of occurrences of above level nh4 values
+bmc.centre.no3.green <- bmc.centre %>%
+  filter(no3 < 75) %>%
+  select(no3)
+
+bmc.centre.no3.amber <- bmc.centre %>%
+  filter(between(no2, 75, 300)) %>%
+  select(no3)
+
+bmc.centre.no3.red <- bmc.centre %>%
+  filter(no3 > 300) %>%
+  select(no3)
+```
+
+``` {r bmcCentreNO3Skim}
+
+bmc.centre.no3.skim <- bmc.centre %>%
+  filter(!is.na(no3)) %>%
+  group_by(tank_id) %>%
+  skim(no3) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Nitrate (NO~3~) range not specified in information supplied. Have adapted traffic light system from SAG Sichon and Furtado et al 2014.; green < 75, amber 75 - 300, red > 300. 
+
+Furtado et al 2015. Effects of nitrate toxicity in the Pacific white shrimp, Litopeneaus vannamei, reared with biofloc technology (BFT). Aquaculture International, 23, 315-327.
+
+Nitrate has been recorded from `r bmc.centre.no3.dates$min.date` to `r bmc.centre.no3.dates$max.date`  
+
+Occurrence of recorded nitrite values within green range; `r length(bmc.centre.no3.green$no3)`.
+
+Occurrence of recorded nitrite values within amber range; `r length(bmc.centre.no3.amber$no3)`.
+
+Occurrence of recorded nitrite values within red range; `r length(bmc.centre.no3.red$no3)`.
+
+Percentage of recorded nitrite values within green range; `r format(length(bmc.centre.no3.green$no3) / (length(bmc.centre.no2.green$no3) + length(bmc.centre.no2.red$no3) + length(bmc.centre.no2.amber$no3)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreNO3Hist, fig.cap = "Manasa BMC water nitrate - NO~3~-N mg/l histogram, 'green range' ≤ 75 mg/l (dashed line is upper boundary), 'amber range' 75 - 300 mg/l (dotted line is upper boundary), 'red range' > 300 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.no3.hist <- bmc.centre %>%
+  filter(!is.na(no3)) %>%
+  ggplot(aes(no3)) +
+  geom_histogram(aes(y=..density..), binwidth = 25, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 25) +
+  geom_vline(xintercept = c(75, 300), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("Nitrate mg/l"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.no3.hist
+```
+
+``` {r bmcCentreTank1NO3, fig.cap = "Manasa BMC tank B1 nitrate NO~3~-N mg/l time series, 'green range' ≤ 75 mg/l (dashed line is upper boundary), 'amber range' 75 - 300 mg/l (dotted line is upper boundary), 'red range' > 300 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.no3.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(no3)) %>%
+  ggplot(aes(date, no3)) +
+  geom_hline(yintercept = c(75, 300), linetype = c("dashed", "dotted"),
+             color = c("green", "orange"), size = 1.0) +
+  geom_point(size = 0.5) +
+  labs(x =("Date") ,y = expression("Nitrate mg/l")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.no3.p
+```
+
+### Water Quality Biological Parameters
+
+Water quality summary table for Broodstock Maturation Centre BMC; columns p0 - p100 indicate the range of data and the interquartile values, p50 therefore indicates the median value and is likely to be a more representative average value than the mean (which may be influenced to a greater degree by extreme values). Values given at p0 and p100 indicate the minimum and maximum recorded, these provide a useful indication of the range of the data and if further data cleaning is required (presence of values considered out of range).
+
+``` {r skimWaterQualityBiologicalBMC}
+
+# summarise water quality data
+wqb.bmc.centre.summary <- bmc.centre %>% 
+  skim(gvc, yvc, mortality) %>%
+  mutate(skim_variable = recode(skim_variable, "gvc" = "Green vibrio count", "yvc" = "Yellow vibrio count", "mortality" = "Mortality")) %>%
+  select(-c(skim_type, n_missing, complete_rate))
+```
+
+``` {r wqBiologicalBMCcentreTable, ft.align = "center"}
+
+wqb.bmc.centre.summary %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Biological water quality summary statistics for BMC department."), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+#### Green vibrio count
+
+``` {r bmcCentreGVCDates}
+
+bmc.centre.gvc.dates <- bmc.centre %>%
+  filter(!is.na(gvc)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreGVC}
+
+# filter to find number of occurrences of above level gvc values
+bmc.centre.gvc.green <- bmc.centre %>%
+  filter(gvc < 80) %>%
+  select(gvc)
+
+bmc.centre.gvc.amber <- bmc.centre %>%
+  filter(between(gvc, 80, 100)) %>%
+  select(gvc)
+
+bmc.centre.gvc.red <- bmc.centre %>%
+  filter(gvc > 100) %>%
+  select(gvc)
+
+```
+
+``` {r bmcCentreGVCSkim}
+
+bmc.centre.gvc.skim <- bmc.centre %>%
+  filter(!is.na(gvc)) %>%
+  group_by(tank_id) %>%
+  skim(gvc) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+GVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <80 CFU/ml, amber 80-100 CFU/ml, red >100 CFU/ml.
+
+GVC has been recorded from `r bmc.centre.gvc.dates$min.date` to `r bmc.centre.gvc.dates$max.date`  
+
+Occurrence of recorded GVC values within green range; `r length(bmc.centre.gvc.green$gvc)`.
+
+Occurrence of recorded GVC values within amber range; `r length(bmc.centre.gvc.amber$gvc)`.
+
+Occurrence of recorded GVC values within red range; `r length(bmc.centre.gvc.red$gvc)`.
+
+Percentage of recorded GVC values within green range; `r format(length(bmc.centre.gvc.green$gvc) / (length(bmc.centre.gvc.green$gvc) + length(bmc.centre.gvc.red$gvc) + length(bmc.centre.gvc.amber$gvc)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreGVCHist, fig.cap = "Manasa BMC water GVC histogram, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+bmc.centre.gvc.hist <- bmc.centre %>%
+  filter(!is.na(gvc)) %>%
+  ggplot(aes(gvc)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("GVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+bmc.centre.gvc.hist
+```
+
+``` {r bmcCentreTank1Gvc, fig.cap = "Manasa Maturation Centre tank B1 GVC time series, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.gvc.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(gvc)) %>%
+  ggplot(aes(date, gvc)) + 
+  scale_y_log10(breaks = gvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 10000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(80, 100), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("Date") ,y = expression("GVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.gvc.p
+```
+
+#### Yellow vibrio count
+
+``` {r bmcCentreYVCDates}
+
+bmc.centre.yvc.dates <- bmc.centre %>%
+  filter(!is.na(yvc)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreYVC}
+
+# filter to find number of occurrences of above level gvc values
+bmc.centre.yvc.green <- bmc.centre %>%
+  filter(yvc < 1000) %>%
+  select(yvc)
+
+bmc.centre.yvc.amber <- bmc.centre %>%
+  filter(between(yvc, 1000, 10000)) %>%
+  select(yvc)
+
+bmc.centre.yvc.red <- bmc.centre %>%
+  filter(yvc > 10000) %>%
+  select(yvc)
+
+```
+
+``` {r bmcCentreYVCSkim}
+
+bmc.centre.yvc.skim <- bmc.centre %>%
+  filter(!is.na(yvc)) %>%
+  group_by(tank_id) %>%
+  skim(yvc) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+YVC range not specified. Have borrowed from traffic light system from SAG Sichon (nursery); green <1000 CFU/ml, amber 1000-10,000 CFU/ml, red >10,000 CFU/ml.
+
+YVC has been recorded from `r bmc.centre.yvc.dates$min.date` to `r bmc.centre.yvc.dates$max.date`  
+
+Occurrence of recorded YVC values within green range; `r length(bmc.centre.yvc.green$yvc)`.
+
+Occurrence of recorded YVC values within amber range; `r length(bmc.centre.yvc.amber$yvc)`.
+
+Occurrence of recorded YVC values within red range; `r length(bmc.centre.yvc.red$yvc)`.
+
+Percentage of recorded YVC values within green range; `r format(length(bmc.centre.yvc.green$yvc) / (length(bmc.centre.yvc.green$yvc) + length(bmc.centre.yvc.red$yvc) + length(bmc.centre.yvc.amber$yvc)) * 100, scientific = FALSE, digits = 3)`%.
+
+``` {r bmcCentreYVCHist, fig.cap = "Manasa BMC water YVC histogram, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+
+
+bmc.centre.yvc.hist <- bmc.centre %>%
+  filter(!is.na(yvc)) %>%
+  ggplot(aes(yvc)) +
+  geom_histogram(alpha = 0.4) +
+  scale_x_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "b") +
+  geom_vline(xintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  labs(x = expression("YVC count per ml"), y = "Frequency") +
+  theme_minimal()
+
+bmc.centre.yvc.hist
+```
+
+``` {r bmcCentreTank1Yvc, fig.cap = "Manasa BMC tank 1 YVC time series, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.yvc.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(yvc)) %>%
+  ggplot(aes(date, yvc)) + 
+  scale_y_log10(breaks = yvc.breaks, labels = scales::trans_format("log10", scales::math_format(10^.x)), limits = c(10, 1000000)) +
+  annotation_logticks(sides = "l") +
+  geom_hline(yintercept = c(1000, 10000), linetype = c("dashed", "dotted"), color = c("green", "orange"), size = 1) +
+  geom_point(size = 0.75) +
+  labs(x =("") ,y = expression("YVC count per ml")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.yvc.p
+```
+
+#### Mortality
+
+``` {r bmcCentreMortalityDates}
+
+bmc.centre.mortality.dates <- bmc.centre %>%
+  filter(!is.na(mortality)) %>%
+  summarise(min.date = min(date),
+            max.date = max(date))
+```
+
+``` {r bmcCentreDMortalitySkim}
+
+bmc.centre.deformities.skim <- bmc.centre %>%
+  filter(!is.na(mortality)) %>%
+  group_by(tank_id) %>%
+  skim(mortality) %>%
+  arrange(match(tank_id, c("B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "K1", "K2", "K3", "K4")), desc(tank_id))
+```
+
+Mortality range not specified.
+
+Mortality have been recorded from `r bmc.centre.mortality.dates$min.date` to `r bmc.centre.mortality.dates$max.date`.
+
+``` {r bmcCentreMortalityHist, fig.cap = "Manasa BMC shrimp mortality count histogram.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.mortality.hist <- bmc.centre %>%
+  filter(!is.na(mortality)) %>%
+  ggplot(aes(mortality)) +
+  geom_histogram(aes(y=..density..), binwidth = 1, alpha = 0.4, position = "identity") +
+  geom_density(alpha = 0.2, bw = 1) +
+  xlim(c(1, 10)) +
+  labs(x = expression("Mortality"), y = "Relative Frequency") +
+  theme_minimal()
+
+bmc.centre.mortality.hist
+```
+
+``` {r bmcCentreTank1Mortality, fig.cap = "Manasa BMC tank 1 mortality count time series.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+bmc.centre.tank1.mortality.p <- bmc.centre %>%
+  filter(tank_id == "B1" & !is.na(mortality)) %>%
+  ggplot(aes(date, mortality)) +
+  geom_point(size = 0.5) +
+  labs(x =("") ,y = expression("Mortality")) +
+  scale_x_date(date_labels = "%b-%Y") +
+  theme_minimal()
+
+bmc.centre.tank1.mortality.p
+```
+
+# Appendix
+
+## PL Centre
+
+### Water Quality Physical Parameters
+
+``` {r PLCentreTankLackTable, ft.align="center"}
+
+pl.centre.lack.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank 'lack-of-water' m", as_sup("3 "),  "summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+
+``` {r PLCentreTankTempTable, ft.align="center"}
+
+pl.centre.temp.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank temperature ", as_sup("o"),  "C summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankPhTable, ft.align="center"}
+
+pl.centre.ph.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank pH summary (pm values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankDOTable, ft.align="center"}
+
+pl.centre.do.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank DO mg/l summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankNH3Table, ft.align="center"}
+
+pl.centre.nh3.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank ammonia NH", as_sub("3 "),  "mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankNO2Table, ft.align="center"}
+
+pl.centre.no2.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank nitrite NO", as_sub("2 "),  "mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankAlkTable, ft.align="center"}
+
+pl.centre.alk.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank alkalinity mg/l summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+### Water Quality Biological Parameters
+
+``` {r PLCentreTankGvcTable, ft.align="center"}
+
+pl.centre.gvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank GVC count summary (water)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankYvcTable, ft.align="center"}
+
+pl.centre.yvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank YVC count summary (water)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankTvcTable, ft.align="center"}
+
+pl.centre.tvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank TVC count summary (body)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankDeformitiesTable, ft.align="center"}
+
+pl.centre.deformities.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank Deformity % summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankNecrosisTable, ft.align="center"}
+
+pl.centre.necrosis.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank Necrosis % summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankBolitasTable, ft.align="center"}
+
+pl.centre.bolitas.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank Bolitas % summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r PLCentreTankSurvivalTable, ft.align="center"}
+
+pl.centre.survival.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water PL Centre tank final survival summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+## Maturation Centre
+
+### Water Quality Physical Parameters
+
+``` {r matCentreTankTempTable, ft.align="center"}
+
+mat.centre.temp.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank temperature ", as_sup("o"),  "C summary (pm values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankPhTable, ft.align="center"}
+
+mat.centre.ph.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank pH summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankDOTable, ft.align="center"}
+
+mat.centre.do.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank DO mg/l summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankAlkTable, ft.align="center"}
+
+mat.centre.alkalinity.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank alkalinity mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankNH4Table, ft.align="center"}
+
+mat.centre.nh4.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank ammonia NH", as_sub("4 "),  "mg/l summary (AM values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankNH3Table, ft.align="center"}
+
+mat.centre.nh3.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank ammonia NH", as_sub("3 "),  "mg/l summary (AM values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r matCentreTankNO2Table, ft.align="center"}
+
+mat.centre.no2.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank ammonia NO", as_sub("2 "),  "mg/l summary (AM values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+### Water Quality Biological Parameters
+
+``` {r matCentreTankGvcTable, ft.align="center"}
+
+mat.centre.gvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water Maturation Centre tank GVC count summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+## BMC
+
+### Water Quality Physical Parameters
+
+``` {r bmcCentreTankSalinityTable, ft.align="center"}
+
+bmc.centre.salinity.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank salinity ppt summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankTempTable, ft.align="center"}
+
+bmc.centre.temp.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank temperature ", as_sup("o"), "C summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankPhTable, ft.align="center"}
+
+bmc.centre.ph.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank pH summary (am values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankDOTable, ft.align="center"}
+
+bmc.centre.do.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank DO mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankAlkTable, ft.align="center"}
+
+bmc.centre.alkalinity.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank alkalinity mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankNH3Table, ft.align="center"}
+
+bmc.centre.nh3.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank ammonia NH", as_sub("3 "),  "mg/l summary (AM values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankNO2Table, ft.align="center"}
+
+bmc.centre.no2.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank nitrite NO", as_sub("2 "),  "mg/l summary (AM values)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankNO3Table, ft.align="center"}
+
+bmc.centre.no3.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank nitrate NO", as_sub("3 "),  "mg/l summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+
+
