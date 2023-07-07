@@ -100,6 +100,11 @@ bmc.centre <- indo_bmc %>%
 
 ```
 
+``` {r importFeedLoading}
+
+nursery.feed.composition <- read.csv("data/nursery_feed_composition.csv")
+```
+
 # Context
 In order for Aqua EcoSystems UK Limited (AES) to understand the system operations and management at the SyAqua Group Pte Limited (SAG) Manasa site, it was required that as part of our review, we would summarise water quality parameters and model the operations via Mass Balance calculations.
 This has allowed AES to review and recommend objectively through quantitative data issued via SAG Manasa.
@@ -2450,6 +2455,8 @@ bmc.centre.tank1.salinity.p <- bmc.centre %>%
 bmc.centre.tank1.salinity.p
 ```
 
+Majority of values within specified range. No action required
+
 #### Temperature
 
 ``` {r bmcCentreTempAmDates}
@@ -2527,6 +2534,8 @@ bmc.centre.temp.hist <- bmc.centre %>%
 bmc.centre.temp.hist
 ```
 
+Majority of values above specified range, temperature in PM increase from AM.
+
 ``` {r bmcCentreTank1temp, fig.cap = "Manasa BMC tank 1 temperature ^o^C time series (pm values), specified range 27 - 29 ^o^C (dashed lines).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.temp.am.p <- bmc.centre %>%
@@ -2541,6 +2550,10 @@ bmc.centre.tank1.temp.am.p <- bmc.centre %>%
 
 bmc.centre.tank1.temp.am.p
 ```
+
+Majority of temperature values above specified range. Temperature control or building insulation may be required if the temperature is to be maintained within the specified range.
+
+Consider: Determine current building insulation and feasibility of temperature control.
 
 #### pH
 
@@ -2597,6 +2610,8 @@ bmc.centre.ph.hist <- bmc.centre %>%
 bmc.centre.ph.hist
 ```
 
+High proportion of values below specified range.
+
 ``` {r bmcCentreTank1pH, fig.cap = "Manasa BMC tank B1 pH time series, specified range 8 - 8.3 (dashed lines are outer boundaries).", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.ph.p <- bmc.centre %>%
@@ -2611,6 +2626,10 @@ bmc.centre.tank1.ph.p <- bmc.centre %>%
 
 bmc.centre.tank1.ph.p
 ```
+
+High proportion of pH values below specified range. 
+
+Consider: Alkalinity dosing may be appropriate to buffer pH within specified range. Should only be performed if ammonia level is acceptable.
 
 #### Dissolved oxygen DO
 
@@ -2685,6 +2704,8 @@ bmc.centre.do.hist <- bmc.centre %>%
 bmc.centre.do.hist
 ```
 
+Dissolved oxygen levels within desired range. Some high values indicate calibration of measurements may be required.
+
 ``` {r bmcCentreTank1DO, fig.cap = "Manasa BMC tank B1 dissolved oxygen DO mg/l time series,   'green range' ≥ 5 mg/l (dashed line is lower boundary), 'amber range' 3 - 5 mg/l (dotted line is lower boundary), 'red range' < 3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.do.p <- bmc.centre %>%
@@ -2699,6 +2720,10 @@ bmc.centre.tank1.do.p <- bmc.centre %>%
 
 bmc.centre.tank1.do.p
 ```
+
+Dissolved oxygen levels appear to be well controlled.
+
+Consider: Calibration of oxygen measurement. 
 
 #### Alkalinity
 
@@ -2764,6 +2789,8 @@ bmc.centre.alk.hist <- bmc.centre %>%
 bmc.centre.alk.hist
 ```
 
+Values typically below specified range. 
+
 ``` {r bmcCentreTank1Alk, fig.cap = "Manasa BMC tank B1 dissolved alkalinity mg/l time series,'green range' 140-160 mg/l (dashed lines are outer boundaries), 'amber range' 110-140 mg/l or 160-200 mg/l (dotted lines are outer boundaries), 'red range' < 110 mg/l or > 200 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.alkalinity.p <- bmc.centre %>%
@@ -2778,6 +2805,10 @@ bmc.centre.tank1.alkalinity.p <- bmc.centre %>%
 
 bmc.centre.tank1.alkalinity.p
 ```
+
+Alkalinity values typically below specified range across tanks.
+
+Consider: Alkalinity dosing - if ammonia level is within desired range.
 
 #### Ammonia NH~3~-N
 
@@ -2842,6 +2873,8 @@ bmc.centre.nh3.hist <- bmc.centre %>%
 bmc.centre.nh3.hist
 ```
 
+Majority of ammonia values within desired range. Some elevated values.
+
 ``` {r bmcCentreTank1NH3, fig.cap = "Manasa BMC tank B1 ammonia NH~3~-N mg/l time series, 'green range' ≤ 0.16 mg/l (dashed line is upper boundary), 'amber range' 0.16 - 0.3 mg/l (dotted line is upper boundary), 'red range' > 0.3 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.nh3.p <- bmc.centre %>%
@@ -2856,6 +2889,10 @@ bmc.centre.tank1.nh3.p <- bmc.centre %>%
 
 bmc.centre.tank1.nh3.p
 ```
+
+Majority of ammonia values within desired range. 
+
+Consider: Increase water exchange volume or frequency, especially at times of higher feed loading.
 
 #### Nitrite
 
@@ -2920,6 +2957,8 @@ bmc.centre.no2.hist <- bmc.centre %>%
 bmc.centre.no2.hist
 ```
 
+Majority of values within specified range. Some elevated values.
+
 ``` {r bmcCentreTank1NO2, fig.cap = "Manasa BMC tank B1 nitrite NO~2~-N mg/l time series, 'green range' ≤ 0.5 mg/l (dashed line is upper boundary), 'amber range' 0.5 - 0.8 mg/l (dotted line is upper boundary), 'red range' > 0.8 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.no2.p <- bmc.centre %>%
@@ -2934,6 +2973,10 @@ bmc.centre.tank1.no2.p <- bmc.centre %>%
 
 bmc.centre.tank1.no2.p
 ```
+
+Proportion of nitrite values above specified range. 
+
+Consider: Increase water exchange volume or frequency - especially at times of high feed input.
 
 #### Nitrate
 
@@ -2998,6 +3041,8 @@ bmc.centre.no3.hist <- bmc.centre %>%
 bmc.centre.no3.hist
 ```
 
+Majority of nitrate values within desired range.
+
 ``` {r bmcCentreTank1NO3, fig.cap = "Manasa BMC tank B1 nitrate NO~3~-N mg/l time series, 'green range' ≤ 75 mg/l (dashed line is upper boundary), 'amber range' 75 - 300 mg/l (dotted line is upper boundary), 'red range' > 300 mg/l.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.no3.p <- bmc.centre %>%
@@ -3012,6 +3057,10 @@ bmc.centre.tank1.no3.p <- bmc.centre %>%
 
 bmc.centre.tank1.no3.p
 ```
+
+Majority of nitrate values within desired range.
+
+No action currently required
 
 ### Water Quality Biological Parameters
 
@@ -3104,6 +3153,8 @@ bmc.centre.gvc.hist <- bmc.centre %>%
 bmc.centre.gvc.hist
 ```
 
+Highest frequency of values within specified range, large proportion of values above specified range.
+
 ``` {r bmcCentreTank1Gvc, fig.cap = "Manasa Maturation Centre tank B1 GVC time series, 'green range' ≤ 80 / ml (dashed line is upper boundary), 'amber range' 80 - 100 / ml (dotted line is upper boundary), 'red range' > 100 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.gvc.p <- bmc.centre %>%
@@ -3119,6 +3170,10 @@ bmc.centre.tank1.gvc.p <- bmc.centre %>%
 
 bmc.centre.tank1.gvc.p
 ```
+
+Fluctuation of values within and above specified range. 
+
+Consider: Ensure good water quality is maintained to reduce additional stress on livestock.
 
 #### Yellow vibrio count
 
@@ -3185,6 +3240,8 @@ bmc.centre.yvc.hist <- bmc.centre %>%
 bmc.centre.yvc.hist
 ```
 
+Majority of values above specified range.
+
 ``` {r bmcCentreTank1Yvc, fig.cap = "Manasa BMC tank 1 YVC time series, 'green range' ≤ 1000 / ml (dashed line is upper boundary), 'amber range' 1000 - 10,000 / ml (dotted line is upper boundary), 'red range' > 10,000 / ml.", fig.align = "center", fig.dim = c(8,3), dpi = 200}
 
 bmc.centre.tank1.yvc.p <- bmc.centre %>%
@@ -3201,6 +3258,10 @@ bmc.centre.tank1.yvc.p <- bmc.centre %>%
 bmc.centre.tank1.yvc.p
 ```
 
+Majority of values above specified range.
+
+Consider: Ensure good water quality is maintained to reduce additional stress on livestock.
+
 #### Mortality
 
 ``` {r bmcCentreMortalityDates}
@@ -3213,7 +3274,7 @@ bmc.centre.mortality.dates <- bmc.centre %>%
 
 ``` {r bmcCentreDMortalitySkim}
 
-bmc.centre.deformities.skim <- bmc.centre %>%
+bmc.centre.mortality.skim <- bmc.centre %>%
   filter(!is.na(mortality)) %>%
   group_by(tank_id) %>%
   skim(mortality) %>%
@@ -3250,6 +3311,485 @@ bmc.centre.tank1.mortality.p <- bmc.centre %>%
 
 bmc.centre.tank1.mortality.p
 ```
+
+Variation of mortality rate between tanks. Tanks K1 and K2 have greater maximum mortality rates than B1-B8. Investigate cause of mortality.
+
+Consider: Investigate cause of mortality.
+
+# System Loading Modelling
+
+To determine expected system performance, feed inputs for PL Centre, Maturation Centre and BMC will be studied. Data has been provided to indicate feed type and quantity provided per day across a range of DOCs (Day of culture). Feed composition has been supplied for the some of the feed inputs. The focus will initially be placed on nitrogen inputs in the form of protein, where protein content is not specified it will be estimated from published literature.
+
+## PL Centre
+
+Stock and feed input data have been supplied for tanks: `r unique(pl.centre$tank)`.
+
+For the period: 
+
+Initial stocking quantity ranged from `r format(min(pl.centre$nauplii_stocked, na.rm = TRUE), big.mark = ",")` to `r format(max(pl.centre$nauplii_stocked, na.rm = TRUE), big.mark = ",")`
+
+PL stage is not given in data, assume to PL-14, maximum DOC 29.
+
+Data indicate that tank volumes up to 40 m^3^ (ton).
+
+### Feed Types
+
+For the PL Centre the following feeds have been indicated:
+
+`r unique(pl.centre$feed)`
+
+Nutrient content has not been supplied for all feeds, a summary table was generated for feed type for SAG Sichon.
+
+``` {r nurseryFeedProteinTable, ft.align="center"}
+
+nursery.feed.composition.wide <- nursery.feed.composition %>% group_by(feed) %>% pivot_wider(names_from = variable, values_from = value)
+
+nursery.feed.composition.wide %>%
+  flextable() %>%
+  set_header_labels(feed = "Feed", protein = "Protein", lipid = "Lipid", hufa = "HUFA", fiber = "Fiber", moisture = "Moisture", ash = "Ash") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("Sichon nursery feed composition summary (percentage composition)"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+This information, in combination with data from Manasa will be use to estimate protein content as follows:
+
+* Artemia 14.32%
+* Flake 45%
+* All other feeds 50%
+
+Note that additional algae (cells per ml) has not been included in the calculations, but will contribute to protein loading.
+
+``` {r plCentreFeedLoading}
+
+pl.centre.feed.loading <- pl.centre %>%
+  select(c(date, tank, volume, feed, feed_mass_g)) %>%
+  filter(!is.na(feed),
+         !is.na(feed_mass_g)) %>%
+  mutate(feed.protein.prop = case_when(feed == "Artemia bio" | feed == "Artemia" | feed == "Artemia Sep Art Inve (Cyste)" | feed == "Artemia SyAqua" ~ 0.1432,
+                                       feed == "Flake" ~ 0.45,
+                                       TRUE ~ 0.5),
+         protein.kg = feed_mass_g * feed.protein.prop / 1000,
+         tan = protein.kg * 0.144)
+
+pl.centre.feed.tank.loading <- pl.centre.feed.loading %>%
+  group_by(date, tank) %>%
+  summarise(tank.tan = sum(tan))
+
+```
+
+
+
+### Feed Loading
+
+Maximum TAN loading per tank; `r format(max(pl.centre.feed.tank.loading$tank.tan), scientific = FALSE, digits = 3)` kg.
+
+From the maximum tank TAN, the level to which ammonia can build up in one day can be estimated (using a tank water volume of 40 m^3^ and a 'conservative' free ammonia proportion of 5%); `r format(max(pl.centre.feed.tank.loading$tank.tan) * 1e6 / 40000 * 0.05, scientific = FALSE, digits = 3)` mg/l
+
+Plot tank 4 predicted NH~3~ for comparison to figure 3.9 (actual tank 4 recorded ammonia).
+
+``` {r PLtank4PredictedAmmonia, fig.cap = "PL Center Tank A4 predicted maximum NH~3~ level during culture period (modelled from daily starting point of zero NH~3~ mg/l)", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+desired.tan <- 1
+tan.c1 <- desired.tan
+tan.cbest <- 0
+tan.te <- 1.0
+tan.c2 <- tan.c1 + tan.te * (tan.cbest - tan.c1)
+
+pl.centre.tank4.predicted.nh3 <- pl.centre.feed.loading %>%
+  filter(tank == "A4",
+         !is.na(tan)) %>%
+  group_by(date) %>%
+  summarise(total.tank.tan = sum(tan),
+            volume = mean(volume)) %>%
+  mutate(nh3.per.ml = total.tank.tan * 1e6 / (volume * 1000) * 0.05,
+         daily.exchange.rate = abs(total.tank.tan * 1e6 / (tan.c2 - tan.c1)/ 1000))
+  
+pl.centre.tank4.predicted.nh3.p <- pl.centre.tank4.predicted.nh3 %>%
+  ggplot(aes(date, nh3.per.ml)) +
+  geom_hline(yintercept = c(0.16, 0.3),
+             linetype = c("dashed", "dotted"),
+             color = c("lightgreen", "orange"),
+             size = 1) +
+  geom_point(size = 0.5) +
+  labs(x = "", y = expression(Predicted~Ammonia~(NH[3]-N)~mg/l)) +
+  theme_minimal()
+
+pl.centre.tank4.predicted.nh3.p
+```
+
+### Water Exchange Requirement
+
+Plot tank 4 predicted water exchange requirement based upon feed input. Then calculate maximum PL centre daily water requirement to determine facility requirements.
+
+``` {r plCentreWaterRequirement}
+
+
+pl.centre.water.requirement <- pl.centre.feed.tank.loading %>%
+  filter(!is.na(tank.tan)) %>%
+  mutate(daily.exchange.rate = abs(tank.tan * 1e6 / (tan.c2 - tan.c1) / 1000)) %>%
+  group_by(date) %>%
+  summarise(exchange.sum = sum(daily.exchange.rate))
+
+pl.centre.max.demand <- pl.centre.water.requirement %>%
+  summarise(max.exchange = max(exchange.sum))
+```
+
+``` {r plCentreTank4PredictedExchange, fig.cap = "Predicted daily water exchange required to maintain  PL Tank A4 TAN at a maximum of 1 mg/l, volume m^3^", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.tank4.predicted.exchange.p <- pl.centre.tank4.predicted.nh3 %>%
+  ggplot(aes(date, daily.exchange.rate)) +
+  geom_point(size = 0.5) +
+  labs(x = "", y = expression("Water Exchange " ( m^3/day))) +
+  theme_minimal()
+  
+  pl.centre.tank4.predicted.exchange.p
+```
+
+``` {r plCentreWaterDemand, fig.cap = "Predicted daily department water demand for PL Centre m^3^/day", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+pl.centre.predicted.exchange.p <- pl.centre.water.requirement %>%
+  ggplot(aes(date, exchange.sum)) +
+  geom_point(size = 0.5) +
+  geom_line() +
+  labs(x = "", y = expression("Water Exchange " ( m^3/day))) +
+  theme_minimal()
+
+pl.centre.predicted.exchange.p
+```
+
+Maximum (predicted) daily water requirement for PL Centre: `r format(pl.centre.max.demand$max.exchange, scientific = FALSE, digits = 1)` m^3^/day.
+
+There is a wide range of water requirements predicted. It may be possible to manipulate water requirements by revisiting production planning. It is most efficient to have even spacing between batches if possible - this may or may not be practicable dependent on customer demand.
+
+## Maturation Centre
+
+The maturation centre is comprosed of maturation area and quarantine area.
+
+Stock and feed input data have been supplied for tanks: `r unique(maturation.centre$tank)`. 
+
+### Feed types
+
+The information supplied indicates that the broodstock feed is comprised of sand worm and squid. Nutrient composition nor species specified, but assummed to be Perinereis nuntia and Loligo sp. Nutritional composition will be estimated from literature.
+
+Approximate sand worm nutrient composition:
+
+* Moisture 0.788
+* Protein (dry weight) 0.52
+
+Taken from: S. Techaprempreecha et al. 2011. Nutritional Composition of farmed and wild sandworms, Perinereis nuntia. Animal Feed Science and Technology, 169, 265-269.
+
+Approximate Loligo sp. nutrient composition:
+
+* Protein (wet weight) 0.141
+
+Taken from: R. Pratama and I Rostini 2021. Volatile components composition of fresh squid (Loligo sp.). LJARIIE 7 (4) 617-623.
+
+### Feed loading
+
+``` {r matCentreFeedLoading}
+
+mat.centre.feed.loading <- maturation.centre %>%
+  select(c(date, tank, squid_g, polychaete_g)) %>%
+  pivot_longer(cols = c(squid_g, polychaete_g), names_to = "feed.type", values_to = "feed.mass") %>%
+  mutate(feed.type = recode(feed.type, squid_g = "squid", polychaete_g = "polychaete")) %>%
+  filter(!is.na(feed.mass)) %>%
+  mutate(protein.kg = case_when(feed.type == "squid" ~ feed.mass / 1000 * 0.141,
+                             feed.type == "polychaete" ~ feed.mass / 1000 * 0.212 * 0.52),
+         tan = protein.kg * 0.144)
+
+mat.centre.feed.tank.loading <- mat.centre.feed.loading %>%
+  group_by(date, tank) %>%
+  summarise(tank.tan = sum(tan))
+
+```
+
+Maximum TAN loading per tank; `r format(max(mat.centre.feed.tank.loading$tank.tan), scientific = FALSE, digits = 3)` kg.
+
+From the maximum tank TAN, the level to which ammonia can build up in one day can be estimated (using a water volume of 20 m^3^ and a 'conservative' free ammonia proportion of 5%); `r format(max(pl.centre.feed.tank.loading$tank.tan) * 1e6 / 20000 * 0.05, scientific = FALSE, digits = 3)` mg/l
+
+Plot tank 1 predicted NH~4~ for comparison to figure 3.9 (actual tank 1 recorded NH~4~).
+
+``` {r matTank1PredictedTAN, fig.cap = "Maturation Center Tank M1 predicted maximum NH~4~ level during culture period (modelled from daily starting point of zero NH~4~ mg/l)", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.predicted.nh4 <- mat.centre.feed.loading %>%
+  filter(tank == "M1",
+         !is.na(tan)) %>%
+  group_by(date) %>%
+  summarise(total.tank.tan = sum(tan)) %>%
+  mutate(tan.per.ml = total.tank.tan * 1e6 / (20 * 1000),
+         daily.exchange.rate = abs(total.tank.tan * 1e6 / (tan.c2 - tan.c1)/ 1000))
+  
+mat.centre.tank1.predicted.nh4.p <- mat.centre.tank1.predicted.nh4 %>%
+  ggplot(aes(date, tan.per.ml)) +
+  geom_hline(yintercept = c(1, 3),
+             linetype = c("dashed", "dotted"),
+             color = c("lightgreen", "orange"),
+             size = 1) +
+  geom_point(size = 0.5) +
+  labs(x = "", y = expression(Predicted~TAN~(NH[4]-N)~mg/l)) +
+  theme_minimal()
+
+mat.centre.tank1.predicted.nh4.p
+```
+
+### Water Exchange Requirement
+
+Plot tank 1 predicted water exchange requirement based upon feed input. Then calculate maximum Maturation centre daily water requirement to determine facility requirements.
+
+``` {r matCentreWaterRequirement}
+
+
+mat.centre.water.requirement <- mat.centre.feed.tank.loading %>%
+  filter(!is.na(tank.tan)) %>%
+  mutate(daily.exchange.rate = abs(tank.tan * 1e6 / (tan.c2 - tan.c1) / 1000)) %>%
+  group_by(date) %>%
+  summarise(exchange.sum = sum(daily.exchange.rate))
+
+mat.centre.max.demand <- mat.centre.water.requirement %>%
+  summarise(max.exchange = max(exchange.sum))
+```
+
+``` {r matCentreTank1PredictedExchange, fig.cap = "Predicted daily water exchange required to maintain maturation Tank M1 TAN at a maximum of 1 mg/l, volume m^3^", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.tank1.predicted.exchange.p <- mat.centre.tank1.predicted.nh4 %>%
+  ggplot(aes(date, daily.exchange.rate)) +
+  geom_point(size = 0.5) +
+  labs(x = "", y = expression("Water Exchange " ( m^3/day))) +
+  theme_minimal()
+  
+  mat.centre.tank1.predicted.exchange.p
+```
+
+``` {r matCentreWaterDemand, fig.cap = "Predicted daily department water demand for Maturation Centre m^3^/day", fig.align = "center", fig.dim = c(8,3), dpi = 200}
+
+mat.centre.predicted.exchange.p <- mat.centre.water.requirement %>%
+  ggplot(aes(date, exchange.sum)) +
+  geom_point(size = 0.5) +
+  geom_line() +
+  labs(x = "", y = expression("Water Exchange " ( m^3/day))) +
+  theme_minimal()
+
+mat.centre.predicted.exchange.p
+```
+
+# Additional sampling
+
+In addition to analysing the routine water quality monitoring data, a further set of water quality samples were undertaken upon request. These samples were taken from 26 locations covering the facility and have again be subset into physical and biological water quality variables.
+
+Physical parameters:
+
+* Salinity
+* Chlorine
+* TAN NH~4~-N
+* Ammonia NH~3~-N
+* Nitrite NO~2~-N
+* Alkalinity
+
+Biological parameters:
+
+* Green vibrio count
+* Yellow bacterial count
+
+These data will be summarised according to department within the facility and attention will be focused if any of the variables exceed the desired range as indicated by the green, amber and red classification.
+
+## Water System
+
+Locations:
+
+* SWS, sea water sample, just before pumping.
+* WEF1, upwelling sand filter 1, during pumping.
+* SFF1, upwelling sand filter1, after filtration.
+* RT1, reservoir 1, after treatment.
+* MF1, water after micron filter filtration.
+* PF, water after filtration through pressure sand filter.
+* EFF5, main channel, during AM discharge.
+* EFF6, discharge, during AM discharge.
+
+### Water Quality Physical Parameters
+
+#### Salinity
+
+All samples indicate a salinity of 31 ppt.
+
+#### Chlorine
+
+All samples indicate zero residual chlorine.
+
+#### NH~4~
+
+SWS 0 mg/l, WEF1 0 mg/l, SFF1 0 mg/l, RT1 0 mg/l, MF1 0 mg/l, PF 0 mg/l
+
+EFF5 NA, EFF6 NA
+
+#### NH~3~
+
+SWS 0 mg/l, WEF1 0 mg/l, SFF1 0 mg/l, RT1 0 mg/l, MF1 0 mg/l, PF 0 mg/l
+
+EFF5 NA, EFF6 NA
+
+#### N0~2~
+
+SWS 0.5 mg/l, WEF1 0.25 mg/l, SFF1 0.5 mg/l, RT1 0 mg/l, MF1 0 mg/l, PF 0 mg/l
+
+EFF5 NA, EFF6 NA
+
+#### Alkalinity
+
+SWS 111 mg/l, WEF1 102 mg/l, SFF1 128 mg/l, RT1 119 mg/l, MF1 113 mg/l, PF 119 mg/l
+
+EFF5 NA, EFF6 NA
+
+### Water Quality Biological Parameters
+
+#### Green vibrio count
+
+SWS 1500, WEF1 NA, SFF1 100, RT1 0, MF1 0, PF 0
+
+EFF5 NA, EFF6 NA
+
+#### Yellow vibrio count
+
+SWS 300, WEF1 100, SFF1 225, RT1 50, MF1 17, PF 0
+
+EFF5 NA, EFF6 NA
+
+## PL Centre
+
+Locations:
+
+PL Centre:
+
+* WEF2, upwelling sand filter 2, during pumping.
+* SFF2, upwelling sand filter 2, after filtration.
+* RT2, reservoir 2, after treatment.
+* RF2, water after micron filter filtration.
+* NT1, PL tank, end of day 3.
+* NT2, PL tank, max stocking at end PL stage.
+* ALG1, algae tank, start of culture.
+* AlG2, algae tank, end of mass culture.
+
+### Water Quality Physical Parameters
+
+#### Salinity
+
+All samples indicate a salinity of 31 ppt.
+
+#### Chlorine
+
+All samples indicate zero residual chlorine.
+
+#### NH~4~
+
+WEF2 NA, SFF2 0, RT2 NA, RF2 0
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+#### NH~3~
+
+WEF2 NA, SFF2 0, RT2 NA, RF2 0
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+#### NO~2~
+
+WEF2 NA, SFF2 0.5, RT2 NA, RF2 0,
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+#### Alkalinity
+
+WEF2 NA, SFF2 117, RT2 NA, RF2 102
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+### Water Quality Biological Parameters
+
+#### Green vibrio count
+
+WEF2 NA, SFF2 0, RT2 NA, RF2 0
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+#### Yellow vibrio count
+
+WEF2 NA, SFF2 0, RT2 NA, RF2 0
+
+NT1 NA, NT2 NA, ALG1 NA, ALG2 NA
+
+## Maturation Centre
+
+Locations:
+
+* OMAT, tank water after full use before cleaning.
+* SP1, spawning tank before stocking.
+* SP2, spawning tank before emptying.
+* BMC, water after use before cleaning.
+* QRT, water after use before cleaning.
+
+### Water Quality Physical Parameters
+
+#### Salinity
+
+All samples indicate a salinity of 31 ppt.
+
+#### Chlorine
+
+All samples indicate zero residual chlorine.
+
+#### NH~4~
+
+OMAT_1 1.5mg/l, OMAT_2 1.5mg/l, OMAT_3 0.75mg/l, OMAT_4 1.5mg/l, OMAT_5 0.75mg/l, OMAT_6 3.0mg/l, OMAT_7 3.0mg/l, OMAT_8 1.0mg/l
+
+SP1 0.0mg/l, SP2_1 0.13mg/l, SP2_2 0.0mg/l, SP2_3 0.25mg/l, SP2_9 0.25mg/l, SP2_10 0.0mg/l, SP2_11 0.13mg/l, SP2_12 0.25mg/l 
+
+BMC NA, QRT NA
+
+#### NH~3~
+
+OMAT_1 0.06mg/l, OMAT_2 0.09mg/l, OMAT_3 0.05mg/l, OMAT_4 0.09mg/l, OMAT_5 0.04mg/l, OMAT_6 0.12mg/l, OMAT_7 0.17mg/l, OMAT_8 0.06mg/l
+
+
+SP1 0.0mg/l, SP2_1 0.01mg/l, SP2_2 0.0mg/l, SP2_3 0.01mg/l, SP2_9 0.01mg/l, SP2_10 0.0mg/l, SP2_11 0.01mg/l, SP2_12 0.01mg/l
+
+BMC NA, QRT NA
+
+#### NO~2~
+
+OMAT_1 1.0mg/l, OMAT_2 1.5mg/l, OMAT_3 1.5mg/l, OMAT_4 4.0mg/l, OMAT_5 0.75mg/l, OMAT_6 4.0mg/l, OMAT_7 1.5mg/l, OMAT_8 2.0mg/l
+
+SP1 0.0mg/l, SP2_1 0.0mg/l, SP2_2 0.0mg/l, SP2_3 0.0mg/l, SP2_9 0.0mg/l, SP2_10 0.0mg/l, SP2_11 0.0mg/l, SP2_12 0.0mg/l
+
+BMC NA, QRT NA
+
+#### Alkalinity
+
+OMAT_1 111mg/l, OMAT_2 111mg/l, OMAT_3 102mg/l, OMAT_4 111mg/l, OMAT_5 102mg/l, OMAT_6 111mg/l, OMAT_7 128mg/l, OMAT_8 111mg/l
+
+SP1 102mg/l, SP2_1 111mg/l, SP2_2 111mg/l, SP2_3 111mg/l, SP2_9 136mg/l, SP2_10 128mg/l, SP2_11 128mg/l, SP2_12 136mg/l
+
+BMC NA, QRT NA
+
+### Water Quality Biological Parameters
+
+#### Green vibrio count
+
+OMAT_1 100, OMAT_2 250, OMAT_3 500, OMAT_4 3250, OMAT_5 300, OMAT_6 100, OMAT_7 425, OMAT_8 125
+
+SP1 0, SP2_1 NA, SP2_2 NA, SP2_3 NA, SP2_9 100, SP2_10 0, SP2_11 0, SP2_12 0
+
+BMC NA, QRT NA
+
+### Yellow vibrio count
+
+OMAT_1 2025, OMAT_2 325, OMAT_3 2400, OMAT_4 2050, OMAT_5 800, OMAT_6 775, OMAT_7 675, OMAT_8 675
+
+SP1 13, SP2_1 500, SP2_2 400, SP2_3 225, SP2_9 300, SP2_10 325, SP2_11 50, SP2_12 275 
+
+BMC NA, QRT NA
 
 # Appendix
 
@@ -3690,5 +4230,47 @@ set_caption(caption = as_paragraph("SAG Manasa water BMC tank nitrate NO", as_su
   autonum = run_autonum(seq_id = "tab"))
 ```
 
+### Water Quality Biological Parameters
 
+``` {r bmcCentreTankGVCTable, ft.align="center"}
+
+bmc.centre.gvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank GVC count summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankYVCTable, ft.align="center"}
+
+bmc.centre.yvc.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank YVC count summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
+
+``` {r bmcCentreTankMortalityTable, ft.align="center"}
+
+bmc.centre.mortality.skim %>%
+  select(-c(skim_type, skim_variable, n_missing, complete_rate)) %>%
+  flextable() %>%
+  set_header_labels(skim_variable = "Variable", n_missing = "Missing Data", complete_rate = "Complete rate", numeric.mean = "Mean", numeric.sd = "SD", numeric.p0 = "p0", numeric.p25 = "p25", numeric.p50 = "p50", numeric.p75 = "p75", numeric.p100 = "p100", numeric.hist = "hist") %>%
+  colformat_double(digits = 2) %>%
+  autofit() %>%
+  fit_to_width(7.5) %>%
+set_caption(caption = as_paragraph("SAG Manasa water BMC tank mortality summary"), 
+  style = "Table Caption", 
+  autonum = run_autonum(seq_id = "tab"))
+```
 
